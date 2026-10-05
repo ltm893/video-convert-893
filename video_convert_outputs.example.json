@@ -1,0 +1,10 @@
+{
+  "version": "1",
+  "aws_region": "us-east-1",
+  "storage": {
+    "ingest_bucket": "your-id-here-video-ingest",
+    "output_bucket": "your-private-bucket",
+    "output_prefix": "Videos/",
+    "jobs_table": "your-id-here-video-convert-jobs"
+  }
+}

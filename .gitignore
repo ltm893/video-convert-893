@@ -1,0 +1,13 @@
+node_modules/
+__pycache__/
+*.pyc
+backend/node_modules/
+backend/cdk.out/
+backend/dist/
+backend/bin/config.ts
+backend/lambda/*/node_modules/
+backend/cdk.context.json
+cdk.context.json
+video_convert_outputs.json
+.DS_Store
+.env

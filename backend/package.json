@@ -1,0 +1,22 @@
+{
+  "name": "video-convert-893-backend",
+  "version": "1.0.0",
+  "description": "video-convert-893 CDK stack — family DVD ingest and ffmpeg convert",
+  "scripts": {
+    "build": "tsc",
+    "deploy": "npx cdk deploy",
+    "diff": "npx cdk diff",
+    "synth": "npx cdk synth"
+  },
+  "devDependencies": {
+    "@types/node": "^20.0.0",
+    "aws-cdk": "^2.130.0",
+    "ts-node": "^10.9.0",
+    "typescript": "^5.4.0"
+  },
+  "dependencies": {
+    "aws-cdk-lib": "^2.130.0",
+    "constructs": "^10.0.0",
+    "source-map-support": "^0.5.21"
+  }
+}
