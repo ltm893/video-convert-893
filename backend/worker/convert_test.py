@@ -87,5 +87,27 @@ class EditCommandTest(unittest.TestCase):
         self.assertEqual(gone, [])
 
 
+class ConversionLogTest(unittest.TestCase):
+    def test_log_key_is_outside_incoming_and_keeps_job_id(self):
+        user = "e4c834b8-b001-707d-f7ac-a9f1c25c415e"
+        key = convert.conversion_log_key(user, "9b4034b0-ac8d-40cb-b6d9-04e53376f2b6")
+        self.assertEqual(key, f"conversion-log/{user}/9b4034b0-ac8d-40cb-b6d9-04e53376f2b6.json")
+        self.assertFalse(key.startswith("incoming/"))
+        self.assertEqual(convert.conversion_log_key("", "CampingDragRacing"), "conversion-log/cli/CampingDragRacing.json")
+
+    def test_record_lists_output_mp4s(self):
+        rec = convert.conversion_record(
+            job_id="abc",
+            user_id="u1",
+            filename="Wenner02",
+            kind="video_ts",
+            status="READY",
+            output_keys=["users/u1/Videos/FlorenceAt4509.mp4"],
+        )
+        self.assertEqual(rec["filename"], "Wenner02")
+        self.assertEqual(rec["outputKeys"], ["users/u1/Videos/FlorenceAt4509.mp4"])
+        self.assertEqual(rec["status"], "READY")
+
+
 if __name__ == "__main__":
     unittest.main()

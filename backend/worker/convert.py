@@ -480,6 +480,90 @@ def put_job(table, disc: str, **fields) -> None:
     table.put_item(Item=item)
 
 
+CONVERSION_LOG_ROOT = "conversion-log/"
+
+
+def conversion_log_key(user_id: str, job_id: str) -> str:
+    owner = slug_filename(user_id) if str(user_id or "").strip() else "cli"
+    jid = slug_filename(job_id) or "unknown"
+    return f"{CONVERSION_LOG_ROOT}{owner}/{jid}.json"
+
+
+def conversion_record(
+    *,
+    job_id: str,
+    user_id: str = "",
+    filename: str = "",
+    disc: str = "",
+    kind: str = "",
+    status: str = "",
+    output_keys: list | None = None,
+    output_prefix: str = "",
+    ingest_key: str = "",
+    source: str = "",
+    error: str = "",
+    created_at: str = "",
+    updated_at: str = "",
+) -> dict:
+    now = datetime.now(timezone.utc).strftime("%Y-%m-%dT%H:%M:%SZ")
+    return {
+        "jobId": job_id,
+        "userId": user_id or "",
+        "filename": filename or "",
+        "disc": disc or "",
+        "kind": kind or "",
+        "status": status or "",
+        "outputKeys": [str(key) for key in (output_keys or []) if key],
+        "outputPrefix": output_prefix or "",
+        "ingestKey": ingest_key or "",
+        "source": source or "",
+        "error": error or "",
+        "createdAt": created_at or now,
+        "updatedAt": updated_at or now,
+    }
+
+
+def persist_conversion_log(s3, bucket: str, record: dict) -> str:
+    job_id = str(record.get("jobId") or "unknown")
+    key = conversion_log_key(str(record.get("userId") or ""), job_id)
+    s3.put_object(
+        Bucket=bucket,
+        Key=key,
+        Body=json.dumps(record, indent=2, default=str).encode("utf-8"),
+        ContentType="application/json",
+    )
+    log("conversion log", f"s3://{bucket}/{key}")
+    return key
+
+
+def persist_conversion_log_from_job(s3, table, ingest_bucket: str, disc: str, kind: str = "") -> str | None:
+    if not ingest_bucket:
+        return None
+    pk = job_pk(disc)
+    item = {}
+    try:
+        item = (table.get_item(Key={"pk": pk, "sk": "META"}).get("Item") or {})
+    except Exception as err:
+        log("could not read job for conversion log", err)
+    job_id = str(item.get("jobId") or pk.replace("JOB#", "", 1) or disc)
+    record = conversion_record(
+        job_id=job_id,
+        user_id=str(item.get("userId") or os.environ.get("USER_ID") or ""),
+        filename=str(item.get("filename") or os.environ.get("FILENAME") or ""),
+        disc=str(item.get("disc") or disc),
+        kind=str(item.get("kind") or kind or os.environ.get("EDIT_KIND") or ""),
+        status=str(item.get("status") or ""),
+        output_keys=item.get("outputKeys") or [],
+        output_prefix=str(item.get("outputPrefix") or ""),
+        ingest_key=str(item.get("ingestKey") or ""),
+        source=str(item.get("source") or os.environ.get("SOURCE") or ""),
+        error=str(item.get("error") or ""),
+        created_at=str(item.get("createdAt") or ""),
+        updated_at=str(item.get("updatedAt") or ""),
+    )
+    return persist_conversion_log(s3, ingest_bucket, record)
+
+
 _FFMPEG_TIME_RE = re.compile(r"^(?:\d+(?:\.\d+)?|\d+:[0-5]\d(?::[0-5]\d(?:\.\d+)?)?)$")
 _NORMALIZE_VIDEO = (
     "scale=1280:720:force_original_aspect_ratio=decrease,"
@@ -675,15 +759,18 @@ def main() -> int:
     work = Path(tempfile.mkdtemp(prefix="disc-"))
     out_dir = Path(tempfile.mkdtemp(prefix="mp4-"))
     output_keys = []
+    record_kind = ""
     try:
         put_job(table, disc, status="CONVERTING", ingestKey=prefix, outputPrefix=output_prefix)
         edit_kind = str(os.environ.get("EDIT_KIND") or "").strip().lower()
         produced: list[tuple[Path, str, str]] = []
         if edit_kind in ("clip", "combine"):
+            record_kind = edit_kind
             produced = prepare_edit(s3, output_bucket, work, out_dir, edit_kind)
         else:
             s3_download_prefix(s3, ingest_bucket, prefix, work)
             plan = detect_jobs(work, disc)
+            record_kind = str(plan.get("kind") or "")
             log("detect", json.dumps({
                 "kind": plan.get("kind"),
                 "outputs": [o.get("name") for o in plan.get("outputs") or []],
@@ -722,11 +809,16 @@ def main() -> int:
         put_job(
             table, disc,
             status="READY",
+            kind=record_kind,
             ingestKey=prefix,
             outputPrefix=output_prefix,
             outputKeys=output_keys,
             error="",
         )
+        try:
+            persist_conversion_log_from_job(s3, table, ingest_bucket, disc, record_kind)
+        except Exception as log_err:
+            log("could not write conversion log", log_err)
         s3_delete_prefix(s3, ingest_bucket, prefix)
         supersede_replaced_jobs(s3, table, ingest_bucket, os.environ.get("USER_ID") or "")
         log("done", output_keys)
@@ -738,6 +830,7 @@ def main() -> int:
             put_job(
                 table, disc,
                 status="FAILED",
+                kind=record_kind,
                 ingestKey=prefix,
                 outputPrefix=output_prefix,
                 outputKeys=output_keys,
@@ -745,6 +838,10 @@ def main() -> int:
             )
         except Exception as put_err:
             log("could not write FAILED status", put_err)
+        try:
+            persist_conversion_log_from_job(s3, table, ingest_bucket, disc, record_kind)
+        except Exception as log_err:
+            log("could not write conversion log", log_err)
         return 1
     finally:
         shutil.rmtree(work, ignore_errors=True)
