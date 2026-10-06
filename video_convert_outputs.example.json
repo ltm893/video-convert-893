@@ -1,6 +1,9 @@
 {
   "version": "1",
   "aws_region": "us-east-1",
+  "api": {
+    "base_url": "https://xxxxxxxxxx.execute-api.us-east-1.amazonaws.com/prod/"
+  },
   "storage": {
     "ingest_bucket": "your-id-here-video-ingest",
     "output_bucket": "your-private-bucket",

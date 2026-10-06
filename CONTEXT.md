@@ -11,13 +11,14 @@ Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on 
 | `cognito-s3-stack-893` | Base: Cognito + S3 |
 | `dropbox-893` | Private file manager — MP4s land in this bucket |
 | `pdf-search-893` | OCR PDF search |
-| `video-convert-893` | DVD / video ingest + convert — **this repo** |
+| `video-convert-893` | DVD / video ingest + convert + clip/combine — **this repo** |
 | `dliv-web` | Personal dliv.com frontend |
 
 ## What this stack owns
 - S3 ingest bucket (`{id}-video-ingest`, retained)
 - DynamoDB jobs table (`{id}-video-convert-jobs`)
 - Lambda: **startJob** — Object Created `.../ready` → ECS RunTask
+- Lambda: **uploadApi** — Cognito REST API (`/jobs`, `/uploads`, `/edits`)
 - ECS cluster + Fargate ffmpeg task
 - CloudWatch log group `/ecs/{id}-video-convert`
 
