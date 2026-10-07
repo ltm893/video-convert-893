@@ -6,13 +6,7 @@ Standalone add-on for cognito-s3-stack-893.
 Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on Fargate, and drop MP4s into the existing Dropbox private bucket under `Videos/`.
 
 ## Part of the add-on family
-| Repo | Description |
-|------|-------------|
-| `cognito-s3-stack-893` | Base: Cognito + S3 |
-| `dropbox-893` | Private file manager — MP4s land in this bucket |
-| `pdf-search-893` | OCR PDF search |
-| `video-convert-893` | DVD / video ingest + convert + clip/combine — **this repo** |
-| `dliv-web` | Personal dliv.com frontend |
+Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#repo-family). This stack uses the Cognito user pool, writes MP4s into the `dropbox-893` private bucket, and is called by `dliv-web` through `VIDEO_CONVERT_API_URL`.
 
 ## What this stack owns
 - S3 ingest bucket (`{id}-video-ingest`, retained)

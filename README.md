@@ -8,12 +8,13 @@ Amplify is **not** used for this backend — run **`deploy.sh`**. **`dliv-web`**
 
 ## Repo family
 
-| Repo | Role |
-|------|------|
-| `cognito-s3-stack-893` | Cognito + S3 |
-| `dropbox-893` | Private files — MP4s land in this bucket |
-| `video-convert-893` | This stack |
-| `dliv-web` | Website (clip, combine, disc upload) |
+Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#repo-family).
+
+| Repo | How this stack uses it |
+|------|------------------------|
+| `cognito-s3-stack-893` | Existing user pool |
+| `dropbox-893` | Private bucket where finished MP4s are written |
+| `dliv-web` | Website that calls this API (`VIDEO_CONVERT_API_URL`) |
 
 ## What this deploys
 
