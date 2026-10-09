@@ -14,6 +14,8 @@ import {
   replaceOutputKey,
   safeRelPath,
   buildEditPlan,
+  parseMediaTimestamp,
+  formatMediaTimestamp,
 } from "./paths.mjs";
 
 const userId = "11111111-2222-3333-4444-555555555555";
@@ -157,6 +159,32 @@ test("clip and combine plans stay inside Mine Videos and keep the sources", () =
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "5", end: "1", name: "nope" }), /after the start/);
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "0", end: "1", name: "Race" }), /new file name/);
   assert.throws(() => buildEditPlan(userId, { kind: "combine", sourceKeys: [race], name: "One" }), /at least two/);
+});
+
+test("clip times format to the H:MM:SS string Fargate receives", () => {
+  const formatted = [
+    ["90", "0:01:30"],
+    ["1:30.5", "0:01:30.5"],
+    ["0:01:30.5", "0:01:30.5"],
+    ["1:02:15", "1:02:15"],
+  ];
+  for (const [raw, expected] of formatted) {
+    assert.equal(formatMediaTimestamp(parseMediaTimestamp(raw)), expected);
+  }
+  const race = `users/${userId}/Videos/Race.mp4`;
+  const plan = buildEditPlan(userId, {
+    kind: "clip",
+    sourceKey: race,
+    start: "1:30.5",
+    end: "1:02:15",
+  });
+  assert.equal(plan.clipStart, "0:01:30.5");
+  assert.equal(plan.clipEnd, "1:02:15");
+
+  assert.throws(() => parseMediaTimestamp("1:60"), /1:30/);
+  assert.throws(() => parseMediaTimestamp(""), /start and end/);
+  assert.throws(() => parseMediaTimestamp("-1"), /out of range/);
+  assert.throws(() => parseMediaTimestamp("24:00:01"), /out of range/);
 });
 
 test("a queued edit is not superseded by an older file with the same name", () => {

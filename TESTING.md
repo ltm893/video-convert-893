@@ -62,7 +62,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | Clip and combine env | `EDIT_KIND`, `SOURCE_KEYS`, `CLIP_START`, `CLIP_END`; a file job adds no edit env |
 | Incomplete or nested keys | `incoming/ready`, four extra segments, a `Videos/` key, and `..` all return null |
 
-### Upload paths (12 tests)
+### Upload paths (13 tests)
 
 `backend/lambda/uploadApi/paths.test.mjs`
 
@@ -78,10 +78,11 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | Music folder rename | `outputPrefix` and every track key move together; `Music/` itself is not a file key |
 | Dated CD folder | `CD{yyyymmdd}-N` increments inside that user's Music prefix only |
 | Clip and combine plan | Times become `H:MM:SS`, the new file stays beside the source or under Videos, and bad ranges, names, and photo keys throw |
+| Clip time format | `90` → `0:01:30`, `1:30.5` → `0:01:30.5` on the plan Fargate receives; `1:60`, empty, `-1`, and `24:00:01` are rejected |
 | Queued edit | A `QUEUED` job is not superseded by an older file with the same name |
 | Re-convert | After a successful re-convert, only the older `READY` row with the same name is superseded |
 
-### Worker plan (8 tests)
+### Worker plan (9 tests)
 
 `backend/worker/convert_test.py`
 
@@ -91,6 +92,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | VIDEO_TS wins | A disc with both VOBs and audio is a video job |
 | Dated CD folder | Audio lands in `Music/CD{date}-N/`, and a prefix that is already an album is left alone |
 | Clip command | Source keys stay under Mine Videos; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
+| Formatted clip times | `0:01:30`, `0:01:30.5`, and `1:02:15` pass `safe_ffmpeg_time`. Raw `1:30.5` is rejected here; raw `24:00:01` is accepted here |
 | Concat list | A quote in a path is escaped; the combine command uses the concat demuxer and `libx264` |
 | Queued edit | Same supersede rule as the Lambda |
 | Conversion log key | The log object is `conversion-log/{user}/{job}.json`, outside `incoming/` |
@@ -119,25 +121,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 
 Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stays inside `./run_tests.sh`. None of them need a bucket, a user pool, or a Fargate task.
 
-### 1. Clip times in both languages
-
-`parseMediaTimestamp` / `formatMediaTimestamp` in `backend/lambda/uploadApi/paths.mjs` and `safe_ffmpeg_time` in `backend/worker/convert.py` both accept a clip range, and they do not share a parser.
-
-`buildEditPlan` is already tested for `1:30` → `0:01:30`. The API normalizes with `formatMediaTimestamp` before the worker sees the string, and `safe_ffmpeg_time` is a different regex. These inputs do not agree today:
-
-| Input | API (`parseMediaTimestamp` → format) | Worker (`safe_ffmpeg_time`) |
-|-------|--------------------------------------|------------------------------|
-| `90` | `0:01:30` | accepted |
-| `1:30.5` | `0:01:30.5` | rejected (a fraction is only allowed on `H:MM:SS`) |
-| `0:01:30.5` | `0:01:30.5` | accepted (this is the string the API stores) |
-| `1:02:15` | `1:02:15` | accepted |
-| `1:60` | rejected | rejected |
-| empty, `-1` | rejected | rejected |
-| `24:00:01` | rejected (over 24 hours) | accepted |
-
-Assert the API column in `paths.test.mjs`. Assert that every formatted API value also passes `safe_ffmpeg_time` in `convert_test.py`. That is the string Fargate actually receives. Leave the raw `1:30.5` and `24:00:01` worker rows as comments next to those asserts so a future shared parser does not silently flip one side.
-
-### 2. API handler responses that never touch AWS
+### 1. API handler responses that never touch AWS
 
 `uploadApi` `handler` builds S3 and DynamoDB clients at import, and it does not call them until a route body runs. These events return before that:
 
@@ -149,9 +133,9 @@ Assert the API column in `paths.test.mjs`. Assert that every formatted API value
 
 Add `backend/lambda/uploadApi/handler.test.mjs`. Importing the handler needs `npm ci` in `backend/lambda/uploadApi` the same way startJob already does. Extend `run_tests.sh` with that install.
 
-Leave `GET /jobs`, `POST /uploads`, and `POST /edits` for item 4. Those call DynamoDB and S3.
+`GET /jobs`, `POST /uploads`, and `POST /edits` call DynamoDB and S3, so they stay out of this file.
 
-### 3. startJob skip and stale rules as pure functions
+### 2. startJob skip and stale rules as pure functions
 
 `parseReadyKey` is tested. The handler around it is not. The decisions live inline in `handler`:
 
@@ -163,13 +147,13 @@ Leave `GET /jobs`, `POST /uploads`, and `POST /edits` for item 4. Those call Dyn
 
 Pull `keysFromEvent` and a `shouldSkipExisting(status, updatedAt, now)` helper out of the handler and test them in `parseReadyKey.test.mjs`. That avoids a fake ECS client for the rules that matter.
 
-### 4. One supersede fixture, two copies
+### 3. One supersede fixture, two copies
 
 `jobsToSupersede` exists in `paths.mjs` and `convert.py`. The suite already has the queued-edit case and the re-convert case in both files, written out separately. Move those two item lists into a short comment block that both tests copy verbatim, and add the tie-break: two `READY` rows with the same `createdAt` keep the greater `jobId`.
 
 A drift here deletes the wrong Mine row after a re-convert.
 
-### 5. Audio ffmpeg command, still without running ffmpeg
+### 4. Audio ffmpeg command, still without running ffmpeg
 
 `run_ffmpeg_audio` shells out immediately. Split the command list the way `ffmpeg_clip_commands` already is, and assert:
 

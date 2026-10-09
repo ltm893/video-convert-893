@@ -70,6 +70,16 @@ class EditCommandTest(unittest.TestCase):
         loud = convert.ffmpeg_normalize_command(src, out, True)
         self.assertNotIn("anullsrc=channel_layout=stereo:sample_rate=48000", loud)
 
+    def test_formatted_api_clip_times_pass_ffmpeg_check(self):
+        # formatMediaTimestamp output. This is the string the API stores and Fargate receives.
+        for text in ("0:01:30", "0:01:30.5", "1:02:15"):
+            self.assertEqual(convert.safe_ffmpeg_time(text), text)
+        # Raw "1:30.5" is rejected here; the API formats it to "0:01:30.5" first.
+        # Raw "24:00:01" matches this regex; the API rejects it and never stores it.
+        with self.assertRaises(RuntimeError):
+            convert.safe_ffmpeg_time("1:30.5")
+        self.assertEqual(convert.safe_ffmpeg_time("24:00:01"), "24:00:01")
+
     def test_concat_list_escapes_quotes(self):
         with tempfile.TemporaryDirectory() as raw:
             folder = Path(raw)
