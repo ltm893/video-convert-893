@@ -74,6 +74,14 @@ Docker is required on the deploy machine (Fargate image build). `deploy.sh` writ
 
 Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Videos**.
 
+## Tests
+
+```bash
+./run_tests.sh
+```
+
+Unit tests only. They do not call AWS or ffmpeg. What they cover, and what to add next, is in [TESTING.md](./TESTING.md).
+
 ## Job statuses
 
 `UPLOADING` or `QUEUED` → `CONVERTING` → `READY` or `FAILED` (DynamoDB `{id}-video-convert-jobs`).
@@ -90,6 +98,8 @@ Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Vide
 | `backend/worker` | Fargate ffmpeg image |
 | `backend/scripts/deploy.sh` | Deploy + write outputs |
 | `backend/scripts/ingest.sh` | Sync a mounted disc |
+| `run_tests.sh` | Unit tests (no AWS) |
+| `TESTING.md` | What the suite covers and what to add next |
 | `CONTEXT.md` | Maintainer notes |
 
 ## Security
