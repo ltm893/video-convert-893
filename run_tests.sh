@@ -64,6 +64,8 @@ run_step() {
 
 run_step "startJob ready-key" \
   node --test backend/lambda/startJob/parseReadyKey.test.mjs
+run_step "startJob handler" \
+  node --test backend/lambda/startJob/handler.test.mjs
 run_step "uploadApi paths" \
   node --test backend/lambda/uploadApi/paths.test.mjs
 run_step "uploadApi handler" \

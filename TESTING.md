@@ -14,7 +14,7 @@ One command runs the suite on a laptop. The sections below list what that suite 
 ./run_tests.sh
 ```
 
-Runs the five unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
+Runs the six unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
 
 The script:
 
@@ -29,6 +29,7 @@ GitHub Actions runs the same script on every push to `dev` or `main`, and on pul
 
 ```bash
 node --test backend/lambda/startJob/parseReadyKey.test.mjs
+node --test backend/lambda/startJob/handler.test.mjs
 node --test backend/lambda/uploadApi/paths.test.mjs
 node --test backend/lambda/uploadApi/handler.test.mjs
 python3 backend/worker/convert_test.py
@@ -52,7 +53,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 
 ## What is tested
 
-### Ready key and edit env (5 tests)
+### Ready key and edit env (6 tests)
 
 `backend/lambda/startJob/parseReadyKey.test.mjs`
 
@@ -63,18 +64,36 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | Clip and combine env | `EDIT_KIND`, `SOURCE_KEYS`, `CLIP_START`, `CLIP_END`; a file job adds no edit env |
 | Incomplete or nested keys | `incoming/ready`, four extra segments, a `Videos/` key, and `..` all return null |
 | Skip existing job | `READY` and `CONVERTING` at or under 4 hours are skipped. `CONVERTING` older than 4 hours runs again |
+| Event keys | EventBridge `detail.object.key` wins. Otherwise each S3 record key is kept |
 
-### Upload API responses (3 tests)
+### startJob with mocked AWS (4 tests)
+
+`backend/lambda/startJob/handler.test.mjs`
+
+`ddb.send` and `ecs.send` are replaced. No call leaves the process.
+
+| Test | What it checks |
+|------|----------------|
+| New ready marker | A missing job becomes `CONVERTING`, `RunTask` gets the cluster and subnet, and the task ARN is stored |
+| `+` in the S3 key | `DVD+Video` is job id `DVD Video` |
+| READY job | The job is skipped and `RunTask` is not called |
+| Empty `RunTask` | `failures[0].reason` is stored on a `FAILED` row |
+
+### Upload API responses (7 tests)
 
 `backend/lambda/uploadApi/handler.test.mjs`
 
-These return before any S3 or DynamoDB call.
+The first three return before any AWS call. The rest stub `ddb.send` and `s3.send`.
 
 | Test | What it checks |
 |------|----------------|
 | Missing or short Cognito sub | No `sub`, or a `sub` shorter than 8 characters, is 401 `Unauthorized` |
 | Body that is not JSON | `POST /uploads` with `{` is 400 `invalid JSON` |
 | Unknown path | A known user and `GET /nope` is 404 `Not found` |
+| List jobs | `GET /jobs` returns the mocked query rows |
+| Create edit | `POST /edits` writes a `QUEUED` job, `edit.json`, and `ready`. `1:30.5` is stored as `0:01:30.5` |
+| Start upload | `POST /uploads` for `holiday.mp4` creates a multipart upload and an `UPLOADING` job |
+| Supersede on list | `GET /jobs` deletes the older same-name `READY` row and lists the ingest prefix |
 
 ### Upload paths (14 tests)
 
@@ -97,7 +116,7 @@ These return before any S3 or DynamoDB call.
 | Re-convert | After a successful re-convert, only the older `READY` row with the same name is superseded |
 | Same timestamp | Two `READY` rows with the same `createdAt` keep the greater `jobId` (`job-b` stays, `job-a` goes) |
 
-### Worker plan (12 tests)
+### Worker plan (14 tests)
 
 `backend/worker/convert_test.py`
 
@@ -109,6 +128,8 @@ These return before any S3 or DynamoDB call.
 | Clip command | Source keys stay under Mine Videos; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
 | Formatted clip times | `0:01:30`, `0:01:30.5`, and `1:02:15` pass `safe_ffmpeg_time`. Raw `1:30.5` is rejected here; raw `24:00:01` is accepted here |
 | Audio command | `.mp3` uses `-c:a copy`. `.wav` and `.aiff` use `libmp3lame`, `192k`, and a title tag. ffmpeg is not run |
+| S3 download | A fake client skips the folder marker and `ready`, and downloads the VOB |
+| S3 delete | A fake client deletes 1000 keys, then the remaining one |
 | Concat list | A quote in a path is escaped; the combine command uses the concat demuxer and `libx264` |
 | Queued edit | Same `queuedEdit` row as the Lambda fixture |
 | Re-convert | Same `reconvert` row as the Lambda fixture |
@@ -135,22 +156,6 @@ These return before any S3 or DynamoDB call.
 
 ---
 
-## What to add next
-
-Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stays inside `./run_tests.sh`. None of them need a bucket, a user pool, or a Fargate task.
-
-### 1. startJob event keys and a failed RunTask
-
-`shouldSkipExisting` is tested. The handler around it still owns the rest of the ready-marker path:
-
-- `RunTask` returns no tasks → job row `FAILED` with the failure reason
-- EventBridge `detail.object.key` and an S3 `Records[]` event both yield the object key
-- `+` in the key is a space before parse
-
-Pull `keysFromEvent` out and test it in `parseReadyKey.test.mjs`. The failure row still needs a fake DynamoDB and ECS client, so leave that until the key helper is out.
-
----
-
 ## What stays manual
 
 These need the real account, a mounted disc, or a long ffmpeg encode. They stay off `./run_tests.sh` and off GitHub Actions.
@@ -162,6 +167,7 @@ These need the real account, a mounted disc, or a long ffmpeg encode. They stay 
 | One clip and one combine from dliv | After an API or worker change, against Mine → Videos. |
 | CSS commercial disc | Confirm the worker marks the job `FAILED` and leaves the private bucket alone. |
 | CDK synth | `config.ts` is gitignored, so a snapshot of the template is a local check, not a CI artifact. |
+| `POST /uploads/parts` | Presigned part URLs go through the AWS signer. The other upload routes are covered with a stubbed `send`. |
 
 A live smoke script in the style of `dropbox-893` `verify.sh` fits a GET-only API. A convert here starts Fargate. Keep that for a disc you meant to convert.
 
@@ -196,8 +202,10 @@ test("seconds-only clip start becomes H:MM:SS", () => {
 |------|---------|
 | `run_tests.sh` | CLI runner. Same command locally and in Actions |
 | `.github/workflows/test.yml` | Runs `./run_tests.sh` on `dev`, `main`, and pull requests |
-| `backend/lambda/startJob/parseReadyKey.test.mjs` | Ready-key parse and edit task env |
-| `backend/lambda/uploadApi/handler.test.mjs` | 401, 400, and 404 responses that return before AWS |
+| `backend/lambda/awsMock.mjs` | Replaces `client.send` for the handler tests |
+| `backend/lambda/startJob/parseReadyKey.test.mjs` | Ready-key parse, edit task env, event keys |
+| `backend/lambda/startJob/handler.test.mjs` | startJob with mocked DynamoDB and ECS |
+| `backend/lambda/uploadApi/handler.test.mjs` | 401, 400, 404, and mocked list, edit, upload, and supersede |
 | `backend/fixtures/jobs-to-supersede.json` | Shared supersede rows for the Lambda and the worker |
 | `backend/lambda/uploadApi/paths.test.mjs` | Keys, remap, CD folders, clip/combine plan, supersede |
 | `backend/worker/convert_test.py` | Audio plan, clip/combine commands, conversion log |

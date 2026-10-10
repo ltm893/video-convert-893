@@ -17,6 +17,30 @@ def superseded_ids(name):
     return [item["jobId"] for item in gone], row["superseded"]
 
 
+class FakeS3:
+    def __init__(self, pages):
+        self.pages = pages
+        self.downloads = []
+        self.deletes = []
+
+    def get_paginator(self, name):
+        assert name == "list_objects_v2"
+        pages = self.pages
+
+        class Paginator:
+            def paginate(self, **_kwargs):
+                return pages
+
+        return Paginator()
+
+    def download_file(self, bucket, key, path):
+        self.downloads.append((bucket, key, path))
+        Path(path).write_bytes(b"vob")
+
+    def delete_objects(self, Bucket, Delete):
+        self.deletes.append((Bucket, Delete["Objects"]))
+
+
 class DetectJobsTest(unittest.TestCase):
     def test_audio_folder_becomes_numbered_mp3s(self):
         with tempfile.TemporaryDirectory() as raw:
@@ -93,6 +117,32 @@ class EditCommandTest(unittest.TestCase):
         self.assertEqual(aiff[aiff.index("-c:a") + 1], "libmp3lame")
         self.assertEqual(aiff[aiff.index("-b:a") + 1], "192k")
         self.assertIn("title=02 Audio Track", aiff)
+
+    def test_s3_download_skips_the_ready_marker(self):
+        with tempfile.TemporaryDirectory() as raw:
+            dest = Path(raw)
+            s3 = FakeS3([{
+                "Contents": [
+                    {"Key": "incoming/disc/"},
+                    {"Key": "incoming/disc/ready"},
+                    {"Key": "incoming/disc/VIDEO_TS/VTS_01_1.VOB"},
+                ],
+            }])
+            convert.s3_download_prefix(s3, "ingest", "incoming/disc/", dest)
+            self.assertEqual(
+                s3.downloads,
+                [("ingest", "incoming/disc/VIDEO_TS/VTS_01_1.VOB", str(dest / "VIDEO_TS" / "VTS_01_1.VOB"))],
+            )
+            self.assertEqual((dest / "VIDEO_TS" / "VTS_01_1.VOB").read_bytes(), b"vob")
+
+    def test_s3_delete_batches_at_1000_keys(self):
+        keys = [{"Key": f"incoming/disc/{index}.vob"} for index in range(1001)]
+        s3 = FakeS3([{"Contents": keys}])
+        convert.s3_delete_prefix(s3, "ingest", "incoming/disc/")
+        self.assertEqual(len(s3.deletes), 2)
+        self.assertEqual(s3.deletes[0][0], "ingest")
+        self.assertEqual(len(s3.deletes[0][1]), 1000)
+        self.assertEqual(s3.deletes[1][1], [{"Key": "incoming/disc/1000.vob"}])
 
     def test_formatted_api_clip_times_pass_ffmpeg_check(self):
         # formatMediaTimestamp output. This is the string the API stores and Fargate receives.

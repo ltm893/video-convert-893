@@ -4,15 +4,9 @@ import { ECSClient, RunTaskCommand } from "@aws-sdk/client-ecs";
 import { DynamoDBClient } from "@aws-sdk/client-dynamodb";
 import { DynamoDBDocumentClient, GetCommand, PutCommand } from "@aws-sdk/lib-dynamodb";
 
-const ecs = new ECSClient({});
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+export const ecs = new ECSClient({});
+export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const JOBS_TABLE = process.env.JOBS_TABLE;
-const CLUSTER_ARN = process.env.CLUSTER_ARN;
-const TASK_DEF_ARN = process.env.TASK_DEF_ARN;
-const CONTAINER_NAME = process.env.CONTAINER_NAME || "ffmpeg";
-const SUBNETS = (process.env.SUBNETS || "").split(",").map((s) => s.trim()).filter(Boolean);
-const SECURITY_GROUP = process.env.SECURITY_GROUP;
 const STALE_MS = 4 * 60 * 60 * 1000;
 
 export const handler = async (event) => {
@@ -31,7 +25,7 @@ export const handler = async (event) => {
     const pk = `JOB#${parsed.jobId}`;
     try {
       const existing = await ddb.send(new GetCommand({
-        TableName: JOBS_TABLE,
+        TableName: process.env.JOBS_TABLE,
         Key: { pk, sk: "META" },
       }));
       if (shouldSkipExisting(existing.Item?.status, existing.Item?.updatedAt, Date.now())) {
@@ -57,7 +51,7 @@ export const handler = async (event) => {
       };
       if (parsed.userId) item.userId = parsed.userId;
       if (parsed.source) item.source = parsed.source;
-      await ddb.send(new PutCommand({ TableName: JOBS_TABLE, Item: item }));
+      await ddb.send(new PutCommand({ TableName: process.env.JOBS_TABLE, Item: item }));
 
       const env = [
         { name: "DISC_NAME", value: discName },
@@ -71,19 +65,19 @@ export const handler = async (event) => {
       env.push(...editTaskEnvironment(item));
 
       const run = await ecs.send(new RunTaskCommand({
-        cluster: CLUSTER_ARN,
-        taskDefinition: TASK_DEF_ARN,
+        cluster: process.env.CLUSTER_ARN,
+        taskDefinition: process.env.TASK_DEF_ARN,
         launchType: "FARGATE",
         startedBy: `ready-${parsed.jobId}`.slice(0, 36),
         networkConfiguration: {
           awsvpcConfiguration: {
-            subnets: SUBNETS,
-            securityGroups: SECURITY_GROUP ? [SECURITY_GROUP] : [],
+            subnets: (process.env.SUBNETS || "").split(",").map((s) => s.trim()).filter(Boolean),
+            securityGroups: process.env.SECURITY_GROUP ? [process.env.SECURITY_GROUP] : [],
             assignPublicIp: "ENABLED",
           },
         },
         overrides: {
-          containerOverrides: [{ name: CONTAINER_NAME, environment: env }],
+          containerOverrides: [{ name: process.env.CONTAINER_NAME || "ffmpeg", environment: env }],
         },
       }));
       if (!run.tasks?.length) {
@@ -93,7 +87,7 @@ export const handler = async (event) => {
       const taskArn = run.tasks[0].taskArn || "";
       if (taskArn) {
         await ddb.send(new PutCommand({
-          TableName: JOBS_TABLE,
+          TableName: process.env.JOBS_TABLE,
           Item: { ...item, taskArn, updatedAt: new Date().toISOString() },
         }));
       }
@@ -103,11 +97,11 @@ export const handler = async (event) => {
       failed.push({ jobId: parsed.jobId, error: message });
       try {
         const existing = await ddb.send(new GetCommand({
-          TableName: JOBS_TABLE,
+          TableName: process.env.JOBS_TABLE,
           Key: { pk, sk: "META" },
         }));
         await ddb.send(new PutCommand({
-          TableName: JOBS_TABLE,
+          TableName: process.env.JOBS_TABLE,
           Item: {
             ...(existing.Item || {}),
             pk,
@@ -183,7 +177,7 @@ function stem(filename) {
   return base.replace(/[^A-Za-z0-9._-]+/g, "-").replace(/-+/g, "-").replace(/^-|-$/g, "");
 }
 
-function keysFromEvent(event) {
+export function keysFromEvent(event) {
   if (event?.detail?.object?.key) return [event.detail.object.key];
   const records = event?.Records || [];
   return records.map((r) => r.s3?.object?.key).filter(Boolean);

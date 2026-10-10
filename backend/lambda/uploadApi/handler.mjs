@@ -36,13 +36,10 @@ import {
   buildEditPlan,
 } from "./paths.mjs";
 
-const s3 = new S3Client({});
-const ecs = new ECSClient({});
-const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
+export const s3 = new S3Client({});
+export const ecs = new ECSClient({});
+export const ddb = DynamoDBDocumentClient.from(new DynamoDBClient({}));
 
-const INGEST_BUCKET = process.env.INGEST_BUCKET;
-const JOBS_TABLE = process.env.JOBS_TABLE;
-const CLUSTER_ARN = process.env.CLUSTER_ARN;
 const PUT_EXPIRES = 900;
 const USER_INDEX = "userId-createdAt-index";
 
@@ -135,7 +132,7 @@ async function loadOwnedJob(userId, jobId) {
     throw err;
   }
   const existing = await ddb.send(new GetCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Key: { pk: `JOB#${jobId}`, sk: "META" },
   }));
   if (!existing.Item || existing.Item.userId !== userId) {
@@ -179,15 +176,15 @@ async function createEdit(userId, body) {
   };
   if (plan.clipStart) item.clipStart = plan.clipStart;
   if (plan.clipEnd) item.clipEnd = plan.clipEnd;
-  await ddb.send(new PutCommand({ TableName: JOBS_TABLE, Item: item }));
+  await ddb.send(new PutCommand({ TableName: process.env.JOBS_TABLE, Item: item }));
   await s3.send(new PutObjectCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: `${ingestKey}edit.json`,
     Body: JSON.stringify(plan),
     ContentType: "application/json",
   }));
   await s3.send(new PutObjectCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: `${ingestKey}ready`,
     Body: JSON.stringify({ jobId, userId, kind: plan.kind }),
     ContentType: "application/json",
@@ -217,7 +214,7 @@ async function createDiscJob(userId, body) {
     outputPrefix = nextCdAlbumPrefix(musicRoot, existing);
   }
   await ddb.send(new PutCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Item: {
       pk: `JOB#${jobId}`,
       sk: "META",
@@ -253,7 +250,7 @@ async function initiateDiscFile(userId, body) {
   const contentType = String(body.contentType || "application/octet-stream");
   const key = `incoming/${userId}/${job.jobId}/${relativePath}`;
   const started = await s3.send(new CreateMultipartUploadCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: key,
     ContentType: contentType,
   }));
@@ -273,13 +270,13 @@ async function initiateVideoFile(userId, body) {
   const jobId = randomUUID();
   const key = `incoming/${userId}/${jobId}/${filename}`;
   const started = await s3.send(new CreateMultipartUploadCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: key,
     ContentType: contentType,
   }));
   const now = new Date().toISOString();
   await ddb.send(new PutCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Item: {
       pk: `JOB#${jobId}`,
       sk: "META",
@@ -326,7 +323,7 @@ async function signParts(userId, body) {
     const url = await getSignedUrl(
       s3,
       new UploadPartCommand({
-        Bucket: INGEST_BUCKET,
+        Bucket: process.env.INGEST_BUCKET,
         Key: key,
         UploadId: uploadId,
         PartNumber: partNumber,
@@ -360,13 +357,13 @@ async function completeUpload(userId, body) {
     throw err;
   }
   await s3.send(new CompleteMultipartUploadCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: parsed.key,
     UploadId: uploadId,
     MultipartUpload: { Parts: parts },
   }));
   const existing = await ddb.send(new GetCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Key: { pk: `JOB#${parsed.jobId}`, sk: "META" },
   }));
   const job = existing.Item || {};
@@ -379,7 +376,7 @@ async function completeUpload(userId, body) {
   const isFolderJob = job.kind === "disc" || job.kind === "audio";
   const outputPrefix = job.outputPrefix || `users/${userId}/${job.kind === "audio" ? "Music" : "Videos"}/`;
   await ddb.send(new PutCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Item: {
       ...job,
       pk: `JOB#${parsed.jobId}`,
@@ -399,7 +396,7 @@ async function completeUpload(userId, body) {
   }));
   if (!isFolderJob) {
     await s3.send(new PutObjectCommand({
-      Bucket: INGEST_BUCKET,
+      Bucket: process.env.INGEST_BUCKET,
       Key: `${parsed.prefix}ready`,
       Body: JSON.stringify({ jobId: parsed.jobId, userId, filename: parsed.filename }),
       ContentType: "application/json",
@@ -425,7 +422,7 @@ async function finishDiscUpload(userId, body) {
   }
   const prefix = job.ingestKey || `incoming/${userId}/${job.jobId}/`;
   await s3.send(new PutObjectCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: `${prefix.endsWith("/") ? prefix : `${prefix}/`}ready`,
     Body: JSON.stringify({ jobId: job.jobId, userId, filename: job.filename, kind: "disc" }),
     ContentType: "application/json",
@@ -442,18 +439,18 @@ async function abortUpload(userId, body) {
     throw err;
   }
   await s3.send(new AbortMultipartUploadCommand({
-    Bucket: INGEST_BUCKET,
+    Bucket: process.env.INGEST_BUCKET,
     Key: parsed.key,
     UploadId: uploadId,
   }));
   const existing = await ddb.send(new GetCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Key: { pk: `JOB#${parsed.jobId}`, sk: "META" },
   }));
   if (existing.Item && existing.Item.userId === userId && existing.Item.kind !== "disc" && existing.Item.kind !== "audio") {
     const now = new Date().toISOString();
     await ddb.send(new PutCommand({
-      TableName: JOBS_TABLE,
+      TableName: process.env.JOBS_TABLE,
       Item: {
         ...existing.Item,
         status: "FAILED",
@@ -502,7 +499,7 @@ async function listUserJobItems(userId) {
   let ExclusiveStartKey;
   do {
     const out = await ddb.send(new QueryCommand({
-      TableName: JOBS_TABLE,
+      TableName: process.env.JOBS_TABLE,
       IndexName: USER_INDEX,
       KeyConditionExpression: "userId = :u",
       ExpressionAttributeValues: { ":u": userId },
@@ -538,7 +535,7 @@ async function remapJobOutputs(userId, body) {
     };
     if (outputPrefix) next.outputPrefix = outputPrefix;
     await ddb.send(new PutCommand({
-      TableName: JOBS_TABLE,
+      TableName: process.env.JOBS_TABLE,
       Item: next,
     }));
     updated.push({
@@ -611,7 +608,7 @@ async function deleteJobs(userId, body) {
       }
       const now = new Date().toISOString();
       await ddb.send(new PutCommand({
-        TableName: JOBS_TABLE,
+        TableName: process.env.JOBS_TABLE,
         Item: { ...item, outputKeys: cut.outputKeys, updatedAt: now },
       }));
       updated.push({ jobId: id, filename: item.filename || "", outputKeys: cut.outputKeys });
@@ -633,7 +630,7 @@ async function wipeJob(userId, item) {
   await stopConvertTask(item);
   await deleteIngestPrefix(ingestPrefixForJob(userId, item));
   await ddb.send(new DeleteCommand({
-    TableName: JOBS_TABLE,
+    TableName: process.env.JOBS_TABLE,
     Key: { pk: item.pk || `JOB#${jobIdOf(item)}`, sk: item.sk || "META" },
   }));
 }
@@ -643,12 +640,12 @@ function startedByForJob(jobId) {
 }
 
 async function stopConvertTask(item) {
-  if (!CLUSTER_ARN) return;
+  if (!process.env.CLUSTER_ARN) return;
   const arns = new Set();
   if (item.taskArn) arns.add(item.taskArn);
   try {
     const listed = await ecs.send(new ListTasksCommand({
-      cluster: CLUSTER_ARN,
+      cluster: process.env.CLUSTER_ARN,
       startedBy: startedByForJob(jobIdOf(item)),
       desiredStatus: "RUNNING",
     }));
@@ -659,7 +656,7 @@ async function stopConvertTask(item) {
   for (const task of arns) {
     try {
       await ecs.send(new StopTaskCommand({
-        cluster: CLUSTER_ARN,
+        cluster: process.env.CLUSTER_ARN,
         task,
         reason: "User removed convert job",
       }));
@@ -675,14 +672,14 @@ async function deleteIngestPrefix(prefix) {
   let token;
   do {
     const listed = await s3.send(new ListObjectsV2Command({
-      Bucket: INGEST_BUCKET,
+      Bucket: process.env.INGEST_BUCKET,
       Prefix: prefix,
       ContinuationToken: token,
     }));
     const objects = (listed.Contents || []).map((obj) => ({ Key: obj.Key })).filter((obj) => obj.Key);
     if (objects.length) {
       await s3.send(new DeleteObjectsCommand({
-        Bucket: INGEST_BUCKET,
+        Bucket: process.env.INGEST_BUCKET,
         Delete: { Objects: objects, Quiet: true },
       }));
     }
@@ -692,7 +689,7 @@ async function deleteIngestPrefix(prefix) {
   let uploadToken;
   do {
     const listed = await s3.send(new ListMultipartUploadsCommand({
-      Bucket: INGEST_BUCKET,
+      Bucket: process.env.INGEST_BUCKET,
       Prefix: prefix,
       KeyMarker: uploadToken?.KeyMarker,
       UploadIdMarker: uploadToken?.UploadIdMarker,
@@ -700,7 +697,7 @@ async function deleteIngestPrefix(prefix) {
     for (const upload of listed.Uploads || []) {
       if (!upload.Key || !upload.UploadId) continue;
       await s3.send(new AbortMultipartUploadCommand({
-        Bucket: INGEST_BUCKET,
+        Bucket: process.env.INGEST_BUCKET,
         Key: upload.Key,
         UploadId: upload.UploadId,
       }));
@@ -715,7 +712,7 @@ async function jobUploadProgress(userId, item) {
   const prefix = item.ingestKey || `incoming/${userId}/${item.jobId}/`;
   try {
     const listed = await s3.send(new ListMultipartUploadsCommand({
-      Bucket: INGEST_BUCKET,
+      Bucket: process.env.INGEST_BUCKET,
       Prefix: prefix,
     }));
     const uploads = [...(listed.Uploads || [])].sort((a, b) => (
@@ -724,7 +721,7 @@ async function jobUploadProgress(userId, item) {
     const upload = uploads[0];
     if (!upload?.Key || !upload.UploadId) return null;
     const partsOut = await s3.send(new ListPartsCommand({
-      Bucket: INGEST_BUCKET,
+      Bucket: process.env.INGEST_BUCKET,
       Key: upload.Key,
       UploadId: upload.UploadId,
     }));
