@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-10
 
-One command runs the suite on a laptop. The sections below list what that suite already checks, then the cases to add next. The suite does not call AWS, ffmpeg, or `deploy.sh`.
+`./run_tests.sh` runs 55 tests. Lambda handlers stub `client.send`. The worker uses a fake S3 client. Nothing in the suite calls a live AWS account, ffmpeg, or `deploy.sh`.
 
 ---
 
@@ -36,7 +36,7 @@ python3 backend/worker/convert_test.py
 python3 backend/scripts/test_detect.py
 ```
 
-`parseReadyKey.test.mjs` needs `backend/lambda/startJob/node_modules` first (`npm ci --omit=dev` in that directory). `handler.test.mjs` needs the same install in `backend/lambda/uploadApi`.
+The startJob tests need `backend/lambda/startJob/node_modules` first (`npm ci --omit=dev` in that directory). `backend/lambda/uploadApi/handler.test.mjs` needs the same install in `backend/lambda/uploadApi`. `./run_tests.sh` does both installs.
 
 ---
 
@@ -175,10 +175,12 @@ A live smoke script in the style of `dropbox-893` `verify.sh` fits a GET-only AP
 
 ## Adding new tests
 
-1. Lambda rules that do not call AWS go in `backend/lambda/uploadApi/paths.test.mjs`, `backend/lambda/uploadApi/handler.test.mjs`, or `backend/lambda/startJob/parseReadyKey.test.mjs`.
-2. Disc layout and ffmpeg argument lists go in `backend/worker/convert_test.py` or `backend/scripts/test_detect.py`.
-3. Build a temp directory of small files. The detect tests use `1_500_000` bytes so a VOB counts as a title, and `20_000` bytes for a web upload.
-4. Run `./run_tests.sh`.
+1. Pure Lambda rules go in `backend/lambda/uploadApi/paths.test.mjs` or `backend/lambda/startJob/parseReadyKey.test.mjs`.
+2. Handler cases that need DynamoDB, S3, or ECS go in `handler.test.mjs` and stub `send` with `backend/lambda/awsMock.mjs`.
+3. Disc layout, ffmpeg argument lists, and the fake S3 client go in `backend/worker/convert_test.py` or `backend/scripts/test_detect.py`.
+4. Supersede rows go in `backend/fixtures/jobs-to-supersede.json`. The Lambda and the worker both read that file.
+5. Build a temp directory of small files. The detect tests use `1_500_000` bytes so a VOB counts as a title, and `20_000` bytes for a web upload.
+6. Run `./run_tests.sh`.
 
 ### Example
 

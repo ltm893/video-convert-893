@@ -80,7 +80,7 @@ Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Vide
 ./run_tests.sh
 ```
 
-Unit tests only. They do not call AWS or ffmpeg. What they cover, and what to add next, is in [TESTING.md](./TESTING.md).
+55 tests. Handlers stub DynamoDB, S3, and ECS. The worker fakes S3 and checks ffmpeg argument lists without running ffmpeg. What each test covers, and what still needs a real account or a disc, is in [TESTING.md](./TESTING.md). GitHub Actions runs the same script on `dev`, `main`, and pull requests.
 
 ## Job statuses
 
@@ -98,8 +98,11 @@ Unit tests only. They do not call AWS or ffmpeg. What they cover, and what to ad
 | `backend/worker` | Fargate ffmpeg image |
 | `backend/scripts/deploy.sh` | Deploy + write outputs |
 | `backend/scripts/ingest.sh` | Sync a mounted disc |
-| `run_tests.sh` | Unit tests (no AWS) |
-| `TESTING.md` | What the suite covers and what to add next |
+| `backend/fixtures/jobs-to-supersede.json` | Shared supersede cases for the Lambda and the worker |
+| `backend/lambda/awsMock.mjs` | Stubs `client.send` in the handler tests |
+| `run_tests.sh` | 55 tests. Stubs AWS. Does not run ffmpeg |
+| `.github/workflows/test.yml` | Runs `./run_tests.sh` |
+| `TESTING.md` | What the suite covers and what stays manual |
 | `CONTEXT.md` | Maintainer notes |
 
 ## Security

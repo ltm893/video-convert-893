@@ -1,5 +1,5 @@
 # CONTEXT.md — video-convert-893
-# Last updated: 2026-09-25
+# Last updated: 2026-10-10
 
 ## What this repo is
 Standalone add-on for cognito-s3-stack-893.
@@ -36,6 +36,22 @@ cp bin/config.example.ts bin/config.ts
 
 Writes `video_convert_outputs.json` at repo root (gitignored).
 
+## Tests
+
+```bash
+./run_tests.sh
+```
+
+55 tests. No live AWS account, no ffmpeg binary, no `deploy.sh`. Details are in `TESTING.md`.
+
+- `node:test` for the Lambdas. `awsMock.mjs` replaces `client.send` for startJob and uploadApi.
+- `unittest` for the worker and disc detect. S3 download and delete use a fake client. ffmpeg is checked as an argument list.
+- `backend/fixtures/jobs-to-supersede.json` is the one supersede list. The Lambda, the worker, and disc detect all read it.
+- Clip times are asserted as the formatted string Fargate receives (`1:30.5` → `0:01:30.5`).
+- GitHub Actions (`.github/workflows/test.yml`) runs `./run_tests.sh` on `dev`, `main`, and pull requests.
+
+Presigned part URLs, `deploy.sh`, `ingest.sh`, and a real encode stay manual.
+
 ## Structure
 ```
 video-convert-893/
@@ -44,9 +60,15 @@ video-convert-893/
 │   ├── bin/config.ts            ← gitignored
 │   ├── bin/config.example.ts
 │   ├── lib/video-convert-stack.ts
-│   ├── lambda/startJob/
-│   ├── worker/                  ← Fargate ffmpeg image
-│   └── scripts/deploy.sh ingest.sh
+│   ├── fixtures/jobs-to-supersede.json
+│   ├── lambda/awsMock.mjs
+│   ├── lambda/startJob/         ← handler plus parseReadyKey and handler tests
+│   ├── lambda/uploadApi/        ← paths and handler tests
+│   ├── worker/                  ← Fargate image, convert.py, convert_test.py
+│   └── scripts/deploy.sh ingest.sh test_detect.py
+├── run_tests.sh
+├── TESTING.md
+├── .github/workflows/test.yml
 ├── video_convert_outputs.json   ← gitignored
 ├── CONTEXT.md
 └── README.md
