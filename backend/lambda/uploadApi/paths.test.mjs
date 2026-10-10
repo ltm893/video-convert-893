@@ -1,5 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
+import { readFileSync } from "node:fs";
 import {
   ingestPrefixForJob,
   jobMatchesDeletedFile,
@@ -20,6 +21,15 @@ import {
 
 const userId = "11111111-2222-3333-4444-555555555555";
 const jobId = "aaaaaaaa-bbbb-cccc-dddd-eeeeeeeeeeee";
+const supersedeFixture = JSON.parse(readFileSync(
+  new URL("../../fixtures/jobs-to-supersede.json", import.meta.url),
+  "utf8",
+));
+
+function supersededIds(name) {
+  const row = supersedeFixture.find((item) => item.name === name);
+  return jobsToSupersede(row.items).map((job) => job.jobId);
+}
 
 test("owned disc keys may be nested under the job prefix", () => {
   const parsed = parseOwnedKey(userId, `incoming/${userId}/${jobId}/VIDEO_TS/VTS_01_1.VOB`);
@@ -188,19 +198,16 @@ test("clip times format to the H:MM:SS string Fargate receives", () => {
 });
 
 test("a queued edit is not superseded by an older file with the same name", () => {
-  const gone = jobsToSupersede([
-    { jobId: "clip", filename: "Race-highlight.mp4", status: "QUEUED", createdAt: "2026-10-05T14:00:00Z" },
-    { jobId: "old", filename: "Race-highlight", status: "READY", createdAt: "2026-10-01T10:00:00Z" },
-  ]);
-  assert.deepEqual(gone, []);
+  const row = supersedeFixture.find((item) => item.name === "queuedEdit");
+  assert.deepEqual(supersededIds("queuedEdit"), row.superseded);
 });
 
 test("after a successful re-convert, only the older same-name job is superseded", () => {
-  const gone = jobsToSupersede([
-    { jobId: "new", filename: "CampingDragRacing", status: "READY", createdAt: "2026-09-30T10:00:00Z" },
-    { jobId: "old", filename: "CampingDragRacing", status: "READY", createdAt: "2026-09-28T10:00:00Z" },
-    { jobId: "busy", filename: "TrentonHS", status: "CONVERTING", createdAt: "2026-09-30T11:00:00Z" },
-    { jobId: "busy-old", filename: "TrentonHS", status: "READY", createdAt: "2026-09-29T10:00:00Z" },
-  ]);
-  assert.deepEqual(gone.map((job) => job.jobId), ["old"]);
+  const row = supersedeFixture.find((item) => item.name === "reconvert");
+  assert.deepEqual(supersededIds("reconvert"), row.superseded);
+});
+
+test("same timestamp keeps the greater jobId", () => {
+  const row = supersedeFixture.find((item) => item.name === "sameTimestamp");
+  assert.deepEqual(supersededIds("sameTimestamp"), row.superseded);
 });

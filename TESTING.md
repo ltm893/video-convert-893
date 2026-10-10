@@ -76,7 +76,7 @@ These return before any S3 or DynamoDB call.
 | Body that is not JSON | `POST /uploads` with `{` is 400 `invalid JSON` |
 | Unknown path | A known user and `GET /nope` is 404 `Not found` |
 
-### Upload paths (13 tests)
+### Upload paths (14 tests)
 
 `backend/lambda/uploadApi/paths.test.mjs`
 
@@ -93,10 +93,11 @@ These return before any S3 or DynamoDB call.
 | Dated CD folder | `CD{yyyymmdd}-N` increments inside that user's Music prefix only |
 | Clip and combine plan | Times become `H:MM:SS`, the new file stays beside the source or under Videos, and bad ranges, names, and photo keys throw |
 | Clip time format | `90` → `0:01:30`, `1:30.5` → `0:01:30.5` on the plan Fargate receives; `1:60`, empty, `-1`, and `24:00:01` are rejected |
-| Queued edit | A `QUEUED` job is not superseded by an older file with the same name |
+| Queued edit | A `QUEUED` job in `jobs-to-supersede.json` is not superseded by an older file with the same name |
 | Re-convert | After a successful re-convert, only the older `READY` row with the same name is superseded |
+| Same timestamp | Two `READY` rows with the same `createdAt` keep the greater `jobId` (`job-b` stays, `job-a` goes) |
 
-### Worker plan (9 tests)
+### Worker plan (11 tests)
 
 `backend/worker/convert_test.py`
 
@@ -108,7 +109,9 @@ These return before any S3 or DynamoDB call.
 | Clip command | Source keys stay under Mine Videos; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
 | Formatted clip times | `0:01:30`, `0:01:30.5`, and `1:02:15` pass `safe_ffmpeg_time`. Raw `1:30.5` is rejected here; raw `24:00:01` is accepted here |
 | Concat list | A quote in a path is escaped; the combine command uses the concat demuxer and `libx264` |
-| Queued edit | Same supersede rule as the Lambda |
+| Queued edit | Same `queuedEdit` row as the Lambda fixture |
+| Re-convert | Same `reconvert` row as the Lambda fixture |
+| Same timestamp | Same `sameTimestamp` row as the Lambda fixture |
 | Conversion log key | The log object is `conversion-log/{user}/{job}.json`, outside `incoming/` |
 | Conversion record | A ready record lists the output MP4 keys |
 
@@ -127,7 +130,7 @@ These return before any S3 or DynamoDB call.
 | Small web MP4 | A 20 KB `.mov` is above the 10 KB loose-file floor, so it is a file job named after the disc |
 | CSS hint | `Encrypted` / CSS wording is recognized; a normal ffmpeg progress line is not |
 | Concat protocol | Two VOB parts use `concat:`; one part is a plain `-i` |
-| Supersede waits | A `CONVERTING` name is left alone; an older `READY` twin is the one to drop |
+| Supersede fixture | Every row in `jobs-to-supersede.json`, including the same-timestamp `jobId` tie-break |
 
 ---
 
@@ -145,13 +148,7 @@ Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stay
 
 Pull `keysFromEvent` out and test it in `parseReadyKey.test.mjs`. The failure row still needs a fake DynamoDB and ECS client, so leave that until the key helper is out.
 
-### 2. One supersede fixture, two copies
-
-`jobsToSupersede` exists in `paths.mjs` and `convert.py`. The suite already has the queued-edit case and the re-convert case in both files, written out separately. Move those two item lists into a short comment block that both tests copy verbatim, and add the tie-break: two `READY` rows with the same `createdAt` keep the greater `jobId`.
-
-A drift here deletes the wrong Mine row after a re-convert.
-
-### 3. Audio ffmpeg command, still without running ffmpeg
+### 2. Audio ffmpeg command, still without running ffmpeg
 
 `run_ffmpeg_audio` shells out immediately. Split the command list the way `ffmpeg_clip_commands` already is, and assert:
 
@@ -207,6 +204,7 @@ test("seconds-only clip start becomes H:MM:SS", () => {
 | `.github/workflows/test.yml` | Runs `./run_tests.sh` on `dev`, `main`, and pull requests |
 | `backend/lambda/startJob/parseReadyKey.test.mjs` | Ready-key parse and edit task env |
 | `backend/lambda/uploadApi/handler.test.mjs` | 401, 400, and 404 responses that return before AWS |
+| `backend/fixtures/jobs-to-supersede.json` | Shared supersede rows for the Lambda and the worker |
 | `backend/lambda/uploadApi/paths.test.mjs` | Keys, remap, CD folders, clip/combine plan, supersede |
 | `backend/worker/convert_test.py` | Audio plan, clip/combine commands, conversion log |
 | `backend/scripts/test_detect.py` | DVD / DVD-VR / loose-file detect |

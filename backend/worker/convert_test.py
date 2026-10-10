@@ -1,9 +1,20 @@
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
 import convert
+
+SUPERSEDE_FIXTURE = json.loads(
+    (Path(__file__).resolve().parents[1] / "fixtures" / "jobs-to-supersede.json").read_text()
+)
+
+
+def superseded_ids(name):
+    row = next(item for item in SUPERSEDE_FIXTURE if item["name"] == name)
+    gone = convert.jobs_to_supersede(row["items"])
+    return [item["jobId"] for item in gone], row["superseded"]
 
 
 class DetectJobsTest(unittest.TestCase):
@@ -90,11 +101,16 @@ class EditCommandTest(unittest.TestCase):
             self.assertIn("libx264", encode)
 
     def test_queued_edit_is_not_superseded(self):
-        gone = convert.jobs_to_supersede([
-            {"jobId": "clip", "filename": "Race-highlight.mp4", "status": "QUEUED", "createdAt": "2026-10-05T14:00:00Z"},
-            {"jobId": "old", "filename": "Race-highlight", "status": "READY", "createdAt": "2026-10-01T10:00:00Z"},
-        ])
-        self.assertEqual(gone, [])
+        gone, expected = superseded_ids("queuedEdit")
+        self.assertEqual(gone, expected)
+
+    def test_reconvert_supersedes_only_the_older_same_name_job(self):
+        gone, expected = superseded_ids("reconvert")
+        self.assertEqual(gone, expected)
+
+    def test_same_timestamp_keeps_the_greater_job_id(self):
+        gone, expected = superseded_ids("sameTimestamp")
+        self.assertEqual(gone, expected)
 
 
 class ConversionLogTest(unittest.TestCase):

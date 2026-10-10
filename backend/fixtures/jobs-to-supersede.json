@@ -1,0 +1,28 @@
+[
+  {
+    "name": "queuedEdit",
+    "items": [
+      {"jobId": "clip", "filename": "Race-highlight.mp4", "status": "QUEUED", "createdAt": "2026-10-05T14:00:00Z"},
+      {"jobId": "old", "filename": "Race-highlight", "status": "READY", "createdAt": "2026-10-01T10:00:00Z"}
+    ],
+    "superseded": []
+  },
+  {
+    "name": "reconvert",
+    "items": [
+      {"jobId": "new", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-09-30T10:00:00Z"},
+      {"jobId": "old", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-09-28T10:00:00Z"},
+      {"jobId": "busy", "filename": "TrentonHS", "status": "CONVERTING", "createdAt": "2026-09-30T11:00:00Z"},
+      {"jobId": "busy-old", "filename": "TrentonHS", "status": "READY", "createdAt": "2026-09-29T10:00:00Z"}
+    ],
+    "superseded": ["old"]
+  },
+  {
+    "name": "sameTimestamp",
+    "items": [
+      {"jobId": "job-b", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-10-01T10:00:00Z"},
+      {"jobId": "job-a", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-10-01T10:00:00Z"}
+    ],
+    "superseded": ["job-a"]
+  }
+]
