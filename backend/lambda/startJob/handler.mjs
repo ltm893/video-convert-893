@@ -34,10 +34,7 @@ export const handler = async (event) => {
         TableName: JOBS_TABLE,
         Key: { pk, sk: "META" },
       }));
-      const status = existing.Item?.status;
-      const updatedAt = Date.parse(existing.Item?.updatedAt || "") || 0;
-      const stale = status === "CONVERTING" && Date.now() - updatedAt > STALE_MS;
-      if ((status === "READY" || status === "CONVERTING") && !stale) {
+      if (shouldSkipExisting(existing.Item?.status, existing.Item?.updatedAt, Date.now())) {
         skipped.push(parsed.jobId);
         continue;
       }
@@ -130,6 +127,12 @@ export const handler = async (event) => {
 
   return { started, skipped, failed };
 };
+
+export function shouldSkipExisting(status, updatedAt, now = Date.now()) {
+  const updatedMs = Date.parse(updatedAt || "") || 0;
+  const stale = status === "CONVERTING" && now - updatedMs > STALE_MS;
+  return (status === "READY" || status === "CONVERTING") && !stale;
+}
 
 export function editTaskEnvironment(item) {
   const kind = String(item?.kind || "");

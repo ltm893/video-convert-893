@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { editTaskEnvironment, parseReadyKey } from "./handler.mjs";
+import { editTaskEnvironment, parseReadyKey, shouldSkipExisting } from "./handler.mjs";
 
 test("CLI disc ready key writes shared Videos/", () => {
   assert.deepEqual(parseReadyKey("incoming/DVD-Video-Recording/ready"), {
@@ -38,6 +38,20 @@ test("clip and combine jobs pass source keys to ffmpeg", () => {
     { name: "CLIP_END", value: "0:02:00" },
   ]);
   assert.deepEqual(editTaskEnvironment({ kind: "file", sourceKeys: [source] }), []);
+});
+
+test("skip READY and fresh CONVERTING, rerun CONVERTING older than 4 hours", () => {
+  const now = Date.parse("2026-10-10T12:00:00.000Z");
+  const fourHours = 4 * 60 * 60 * 1000;
+  const fresh = new Date(now - 60 * 1000).toISOString();
+  const exact = new Date(now - fourHours).toISOString();
+  const older = new Date(now - fourHours - 1).toISOString();
+
+  assert.equal(shouldSkipExisting("READY", fresh, now), true);
+  assert.equal(shouldSkipExisting("READY", older, now), true);
+  assert.equal(shouldSkipExisting("CONVERTING", fresh, now), true);
+  assert.equal(shouldSkipExisting("CONVERTING", exact, now), true);
+  assert.equal(shouldSkipExisting("CONVERTING", older, now), false);
 });
 
 test("rejects incomplete or nested ready keys", () => {

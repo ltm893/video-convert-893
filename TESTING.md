@@ -52,7 +52,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 
 ## What is tested
 
-### Ready key and edit env (4 tests)
+### Ready key and edit env (5 tests)
 
 `backend/lambda/startJob/parseReadyKey.test.mjs`
 
@@ -62,6 +62,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | Web ready key | `incoming/{user}/{job}/ready` → `users/{user}/Videos/` |
 | Clip and combine env | `EDIT_KIND`, `SOURCE_KEYS`, `CLIP_START`, `CLIP_END`; a file job adds no edit env |
 | Incomplete or nested keys | `incoming/ready`, four extra segments, a `Videos/` key, and `..` all return null |
+| Skip existing job | `READY` and `CONVERTING` at or under 4 hours are skipped. `CONVERTING` older than 4 hours runs again |
 
 ### Upload API responses (3 tests)
 
@@ -134,17 +135,15 @@ These return before any S3 or DynamoDB call.
 
 Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stays inside `./run_tests.sh`. None of them need a bucket, a user pool, or a Fargate task.
 
-### 1. startJob skip and stale rules as pure functions
+### 1. startJob event keys and a failed RunTask
 
-`parseReadyKey` is tested. The handler around it is not. The decisions live inline in `handler`:
+`shouldSkipExisting` is tested. The handler around it still owns the rest of the ready-marker path:
 
-- `READY`, or `CONVERTING` newer than 4 hours → skip, no `RunTask`
-- `CONVERTING` older than 4 hours → run again
 - `RunTask` returns no tasks → job row `FAILED` with the failure reason
 - EventBridge `detail.object.key` and an S3 `Records[]` event both yield the object key
 - `+` in the key is a space before parse
 
-Pull `keysFromEvent` and a `shouldSkipExisting(status, updatedAt, now)` helper out of the handler and test them in `parseReadyKey.test.mjs`. That avoids a fake ECS client for the rules that matter.
+Pull `keysFromEvent` out and test it in `parseReadyKey.test.mjs`. The failure row still needs a fake DynamoDB and ECS client, so leave that until the key helper is out.
 
 ### 2. One supersede fixture, two copies
 
