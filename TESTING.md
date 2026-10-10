@@ -97,7 +97,7 @@ These return before any S3 or DynamoDB call.
 | Re-convert | After a successful re-convert, only the older `READY` row with the same name is superseded |
 | Same timestamp | Two `READY` rows with the same `createdAt` keep the greater `jobId` (`job-b` stays, `job-a` goes) |
 
-### Worker plan (11 tests)
+### Worker plan (12 tests)
 
 `backend/worker/convert_test.py`
 
@@ -108,6 +108,7 @@ These return before any S3 or DynamoDB call.
 | Dated CD folder | Audio lands in `Music/CD{date}-N/`, and a prefix that is already an album is left alone |
 | Clip command | Source keys stay under Mine Videos; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
 | Formatted clip times | `0:01:30`, `0:01:30.5`, and `1:02:15` pass `safe_ffmpeg_time`. Raw `1:30.5` is rejected here; raw `24:00:01` is accepted here |
+| Audio command | `.mp3` uses `-c:a copy`. `.wav` and `.aiff` use `libmp3lame`, `192k`, and a title tag. ffmpeg is not run |
 | Concat list | A quote in a path is escaped; the combine command uses the concat demuxer and `libx264` |
 | Queued edit | Same `queuedEdit` row as the Lambda fixture |
 | Re-convert | Same `reconvert` row as the Lambda fixture |
@@ -147,13 +148,6 @@ Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stay
 - `+` in the key is a space before parse
 
 Pull `keysFromEvent` out and test it in `parseReadyKey.test.mjs`. The failure row still needs a fake DynamoDB and ECS client, so leave that until the key helper is out.
-
-### 2. Audio ffmpeg command, still without running ffmpeg
-
-`run_ffmpeg_audio` shells out immediately. Split the command list the way `ffmpeg_clip_commands` already is, and assert:
-
-- an `.mp3` source uses `-c:a copy`
-- a `.wav` / `.aiff` source uses `libmp3lame`, `192k`, and a title tag
 
 ---
 

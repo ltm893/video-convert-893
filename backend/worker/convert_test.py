@@ -81,6 +81,19 @@ class EditCommandTest(unittest.TestCase):
         loud = convert.ffmpeg_normalize_command(src, out, True)
         self.assertNotIn("anullsrc=channel_layout=stereo:sample_rate=48000", loud)
 
+    def test_audio_commands_copy_mp3_and_encode_other(self):
+        out = Path("/tmp/out.mp3")
+        mp3 = convert.ffmpeg_audio_commands(Path("/tmp/01 Song.mp3"), out)
+        self.assertEqual(mp3[0][mp3[0].index("-c:a") + 1], "copy")
+        wav = convert.ffmpeg_audio_commands(Path("/tmp/01 Audio Track.wav"), out)[0]
+        aiff = convert.ffmpeg_audio_commands(Path("/tmp/02 Audio Track.aiff"), out)[0]
+        self.assertEqual(wav[wav.index("-c:a") + 1], "libmp3lame")
+        self.assertEqual(wav[wav.index("-b:a") + 1], "192k")
+        self.assertIn("title=01 Audio Track", wav)
+        self.assertEqual(aiff[aiff.index("-c:a") + 1], "libmp3lame")
+        self.assertEqual(aiff[aiff.index("-b:a") + 1], "192k")
+        self.assertIn("title=02 Audio Track", aiff)
+
     def test_formatted_api_clip_times_pass_ffmpeg_check(self):
         # formatMediaTimestamp output. This is the string the API stores and Fargate receives.
         for text in ("0:01:30", "0:01:30.5", "1:02:15"):
