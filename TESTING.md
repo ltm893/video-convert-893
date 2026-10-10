@@ -1,6 +1,6 @@
 # video-convert-893 — testing guide
 
-Last updated: 2026-10-09
+Last updated: 2026-10-10
 
 One command runs the suite on a laptop. The sections below list what that suite already checks, then the cases to add next. The suite does not call AWS, ffmpeg, or `deploy.sh`.
 
@@ -14,12 +14,12 @@ One command runs the suite on a laptop. The sections below list what that suite 
 ./run_tests.sh
 ```
 
-Runs the four unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
+Runs the five unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
 
 The script:
 
 - Needs Node.js 20+ and Python 3.12 (3.11+ is enough locally)
-- Runs `npm ci --omit=dev` in `backend/lambda/startJob` the first time, because `handler.mjs` imports the AWS SDK at load time
+- Runs `npm ci --omit=dev` in `backend/lambda/startJob` and `backend/lambda/uploadApi` the first time, because each `handler.mjs` imports the AWS SDK at load time
 - Leaves that `node_modules` in place for the next run
 - Does not read `backend/bin/config.ts` or `video_convert_outputs.json`
 
@@ -30,11 +30,12 @@ GitHub Actions runs the same script on every push to `dev` or `main`, and on pul
 ```bash
 node --test backend/lambda/startJob/parseReadyKey.test.mjs
 node --test backend/lambda/uploadApi/paths.test.mjs
+node --test backend/lambda/uploadApi/handler.test.mjs
 python3 backend/worker/convert_test.py
 python3 backend/scripts/test_detect.py
 ```
 
-`parseReadyKey.test.mjs` needs `backend/lambda/startJob/node_modules` first (`npm ci --omit=dev` in that directory).
+`parseReadyKey.test.mjs` needs `backend/lambda/startJob/node_modules` first (`npm ci --omit=dev` in that directory). `handler.test.mjs` needs the same install in `backend/lambda/uploadApi`.
 
 ---
 
@@ -61,6 +62,18 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 | Web ready key | `incoming/{user}/{job}/ready` → `users/{user}/Videos/` |
 | Clip and combine env | `EDIT_KIND`, `SOURCE_KEYS`, `CLIP_START`, `CLIP_END`; a file job adds no edit env |
 | Incomplete or nested keys | `incoming/ready`, four extra segments, a `Videos/` key, and `..` all return null |
+
+### Upload API responses (3 tests)
+
+`backend/lambda/uploadApi/handler.test.mjs`
+
+These return before any S3 or DynamoDB call.
+
+| Test | What it checks |
+|------|----------------|
+| Missing or short Cognito sub | No `sub`, or a `sub` shorter than 8 characters, is 401 `Unauthorized` |
+| Body that is not JSON | `POST /uploads` with `{` is 400 `invalid JSON` |
+| Unknown path | A known user and `GET /nope` is 404 `Not found` |
 
 ### Upload paths (13 tests)
 
@@ -121,21 +134,7 @@ There is no Jest, pytest, or CDK assertion library. New tests stay in these two 
 
 Ordered by what breaks a family disc or a Mine edit if it drifts. Each item stays inside `./run_tests.sh`. None of them need a bucket, a user pool, or a Fargate task.
 
-### 1. API handler responses that never touch AWS
-
-`uploadApi` `handler` builds S3 and DynamoDB clients at import, and it does not call them until a route body runs. These events return before that:
-
-| Event | Status |
-|-------|--------|
-| Missing or short `requestContext.authorizer.claims.sub` | 401 |
-| Body that is not JSON | 400 |
-| Known user, path `/nope` | 404 |
-
-Add `backend/lambda/uploadApi/handler.test.mjs`. Importing the handler needs `npm ci` in `backend/lambda/uploadApi` the same way startJob already does. Extend `run_tests.sh` with that install.
-
-`GET /jobs`, `POST /uploads`, and `POST /edits` call DynamoDB and S3, so they stay out of this file.
-
-### 2. startJob skip and stale rules as pure functions
+### 1. startJob skip and stale rules as pure functions
 
 `parseReadyKey` is tested. The handler around it is not. The decisions live inline in `handler`:
 
@@ -147,13 +146,13 @@ Add `backend/lambda/uploadApi/handler.test.mjs`. Importing the handler needs `np
 
 Pull `keysFromEvent` and a `shouldSkipExisting(status, updatedAt, now)` helper out of the handler and test them in `parseReadyKey.test.mjs`. That avoids a fake ECS client for the rules that matter.
 
-### 3. One supersede fixture, two copies
+### 2. One supersede fixture, two copies
 
 `jobsToSupersede` exists in `paths.mjs` and `convert.py`. The suite already has the queued-edit case and the re-convert case in both files, written out separately. Move those two item lists into a short comment block that both tests copy verbatim, and add the tie-break: two `READY` rows with the same `createdAt` keep the greater `jobId`.
 
 A drift here deletes the wrong Mine row after a re-convert.
 
-### 4. Audio ffmpeg command, still without running ffmpeg
+### 3. Audio ffmpeg command, still without running ffmpeg
 
 `run_ffmpeg_audio` shells out immediately. Split the command list the way `ffmpeg_clip_commands` already is, and assert:
 
@@ -180,7 +179,7 @@ A live smoke script in the style of `dropbox-893` `verify.sh` fits a GET-only AP
 
 ## Adding new tests
 
-1. Lambda rules that do not call AWS go in `backend/lambda/uploadApi/paths.test.mjs` or `backend/lambda/startJob/parseReadyKey.test.mjs`.
+1. Lambda rules that do not call AWS go in `backend/lambda/uploadApi/paths.test.mjs`, `backend/lambda/uploadApi/handler.test.mjs`, or `backend/lambda/startJob/parseReadyKey.test.mjs`.
 2. Disc layout and ffmpeg argument lists go in `backend/worker/convert_test.py` or `backend/scripts/test_detect.py`.
 3. Build a temp directory of small files. The detect tests use `1_500_000` bytes so a VOB counts as a title, and `20_000` bytes for a web upload.
 4. Run `./run_tests.sh`.
@@ -208,6 +207,7 @@ test("seconds-only clip start becomes H:MM:SS", () => {
 | `run_tests.sh` | CLI runner. Same command locally and in Actions |
 | `.github/workflows/test.yml` | Runs `./run_tests.sh` on `dev`, `main`, and pull requests |
 | `backend/lambda/startJob/parseReadyKey.test.mjs` | Ready-key parse and edit task env |
+| `backend/lambda/uploadApi/handler.test.mjs` | 401, 400, and 404 responses that return before AWS |
 | `backend/lambda/uploadApi/paths.test.mjs` | Keys, remap, CD folders, clip/combine plan, supersede |
 | `backend/worker/convert_test.py` | Audio plan, clip/combine commands, conversion log |
 | `backend/scripts/test_detect.py` | DVD / DVD-VR / loose-file detect |

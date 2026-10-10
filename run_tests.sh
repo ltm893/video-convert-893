@@ -27,11 +27,16 @@ if ! command -v npm >/dev/null 2>&1; then
   fail "npm not found. Install Node.js 20+ and try again."
 fi
 
-START_JOB="$SCRIPT_DIR/backend/lambda/startJob"
-if [ ! -d "$START_JOB/node_modules" ]; then
-  echo "Installing startJob dependencies (AWS SDK, needed to load handler.mjs)…"
-  (cd "$START_JOB" && npm ci --omit=dev) || fail "npm ci failed in backend/lambda/startJob"
-fi
+install_lambda_deps() {
+  local dir="$1"
+  if [ ! -d "$dir/node_modules" ]; then
+    echo "Installing ${dir#"$SCRIPT_DIR/"} dependencies (AWS SDK, needed to load handler.mjs)…"
+    (cd "$dir" && npm ci --omit=dev) || fail "npm ci failed in ${dir#"$SCRIPT_DIR/"}"
+  fi
+}
+
+install_lambda_deps "$SCRIPT_DIR/backend/lambda/startJob"
+install_lambda_deps "$SCRIPT_DIR/backend/lambda/uploadApi"
 
 echo ""
 echo -e "${BOLD}${CYAN}video-convert-893 tests${RESET}"
@@ -61,6 +66,8 @@ run_step "startJob ready-key" \
   node --test backend/lambda/startJob/parseReadyKey.test.mjs
 run_step "uploadApi paths" \
   node --test backend/lambda/uploadApi/paths.test.mjs
+run_step "uploadApi handler" \
+  node --test backend/lambda/uploadApi/handler.test.mjs
 run_step "worker convert" \
   python3 backend/worker/convert_test.py
 run_step "disc detect" \
