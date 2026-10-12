@@ -60,7 +60,7 @@ Set Amplify env var **`VIDEO_CONVERT_API_URL`** to `api.base_url` from `video_co
 ```bash
 cd backend
 cp bin/config.example.ts bin/config.ts
-# set id, awsRegion, userPoolId, privateBucket
+# set userPoolId and privateBucket. id comes from cognito-s3-stack-893/base/bin/config.ts
 ./scripts/deploy.sh
 ```
 

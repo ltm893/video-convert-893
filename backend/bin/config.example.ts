@@ -4,9 +4,8 @@
 //   cp backend/bin/config.example.ts backend/bin/config.ts
 
 export const config = {
-  // Short prefix for all AWS resource names.
-  // Lowercase letters, numbers, hyphens only.
-  id: "your-id-here",
+  // id is read from the sibling cognito-s3-stack-893/base/bin/config.ts.
+  // Set id here only to keep an already-deployed stack name.
 
   awsRegion: "us-east-1",
 

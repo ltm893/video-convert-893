@@ -29,13 +29,34 @@ if [ ! -f "$CONFIG_FILE" ]; then
   exit 1
 fi
 
-CONFIG_ID=$(grep -E '^\s+id:' "$CONFIG_FILE" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-AWS_REGION=$(grep -E '^\s+awsRegion:' "$CONFIG_FILE" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-USER_POOL_ID=$(grep -E '^\s+userPoolId:' "$CONFIG_FILE" | head -1 | sed 's/.*"\(.*\)".*/\1/')
-PRIVATE_BUCKET=$(grep -E '^\s+privateBucket:' "$CONFIG_FILE" | head -1 | sed 's/.*"\(.*\)".*/\1/')
+config_field() {
+  grep -E "^[[:space:]]+$2:" "$1" | head -1 | sed 's/.*"\([^"]*\)".*/\1/'
+}
+BASE_CONFIG="${BASE_CONFIG_PATH:-${REPO_ROOT}/../cognito-s3-stack-893/base/bin/config.ts}"
+LOCAL_ID=$(config_field "$CONFIG_FILE" id)
+if [ -n "$LOCAL_ID" ] && [ "$LOCAL_ID" != "your-id-here" ]; then
+  CONFIG_ID="$LOCAL_ID"
+  ID_FROM="this config.ts"
+else
+  if [ ! -f "$BASE_CONFIG" ]; then
+    echo "  ❌ id comes from cognito-s3-stack-893/base/bin/config.ts."
+    echo "     Not found at: $BASE_CONFIG"
+    echo "     Set BASE_CONFIG_PATH if that repo is not a sibling."
+    exit 1
+  fi
+  CONFIG_ID=$(config_field "$BASE_CONFIG" id)
+  ID_FROM="$BASE_CONFIG"
+fi
+AWS_REGION=$(config_field "$CONFIG_FILE" awsRegion)
+if [ -z "$AWS_REGION" ] && [ -f "$BASE_CONFIG" ]; then
+  AWS_REGION=$(config_field "$BASE_CONFIG" awsRegion)
+fi
+USER_POOL_ID=$(config_field "$CONFIG_FILE" userPoolId)
+PRIVATE_BUCKET=$(config_field "$CONFIG_FILE" privateBucket)
 
-if [ -z "$CONFIG_ID" ] || [ -z "$AWS_REGION" ] || [ -z "$USER_POOL_ID" ] || [ -z "$PRIVATE_BUCKET" ]; then
-  echo "  ❌ Could not read required values from config.ts."
+if [ -z "$CONFIG_ID" ] || [ "$CONFIG_ID" = "your-id-here" ] || [ -z "$AWS_REGION" ] || [ -z "$USER_POOL_ID" ] || [ -z "$PRIVATE_BUCKET" ]; then
+  echo "  ❌ Could not read id, region, userPoolId, and privateBucket."
+  echo "     id is set in the base config.ts. userPoolId and privateBucket stay in this config.ts."
   exit 1
 fi
 
@@ -45,7 +66,7 @@ API_NAME="${CONFIG_ID}-video-convert-api"
 
 echo "  Stack:          $STACK_NAME"
 echo "  Region:         $AWS_REGION"
-echo "  ID prefix:      $CONFIG_ID"
+echo "  ID prefix:      $CONFIG_ID ($ID_FROM)"
 echo "  User Pool:      $USER_POOL_ID"
 echo "  Output bucket:  $PRIVATE_BUCKET"
 echo "  Ingest bucket:  $INGEST_BUCKET (created, retained)"
