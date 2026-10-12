@@ -3,10 +3,10 @@
 
 ## What this repo is
 Standalone add-on for cognito-s3-stack-893.
-Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on Fargate, and drop MP4s into the existing Dropbox private bucket under `Videos/`.
+Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on Fargate, and drop MP4s into the private bucket under `Videos/`. Deploy `dropbox-893` first. Users open the finished file from the Dropbox file list.
 
 ## Part of the add-on family
-Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#repo-family). This stack uses the Cognito user pool, writes MP4s into the `dropbox-893` private bucket, and is called by `dliv-web` through `VIDEO_CONVERT_API_URL`.
+Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#repo-family). This stack uses the Cognito user pool, writes MP4s into the private bucket, and needs `dropbox-893` so the site can open them. `dliv-web` calls it through `VIDEO_CONVERT_API_URL`.
 
 ## What this stack owns
 - S3 ingest bucket (`{id}-video-ingest`, retained)
@@ -18,7 +18,7 @@ Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#
 
 ## What this stack imports (never creates or deletes)
 - Cognito User Pool — from `config.ts` (same family pool; no extra app client)
-- S3 private Dropbox bucket — from `config.ts` (`Videos/` prefix only)
+- S3 private bucket — from `config.ts` (`Videos/` prefix only). Users open the MP4 through `dropbox-893`.
 
 ## Personal deployment (dliv.com)
 - Stack: `VideoConvertStack-videoconvert893`
@@ -29,7 +29,8 @@ Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#
 ```bash
 cd backend
 cp bin/config.example.ts bin/config.ts
-# edit config.ts
+# set userPoolId and privateBucket
+# id comes from the sibling cognito-s3-stack-893/base/bin/config.ts
 ./scripts/deploy.sh
 ./scripts/ingest.sh "/Volumes/DVD Video Recording"
 ```
@@ -42,7 +43,7 @@ Writes `video_convert_outputs.json` at repo root (gitignored).
 ./run_tests.sh
 ```
 
-55 tests. No live AWS account, no ffmpeg binary, no `deploy.sh`. Details are in `TESTING.md`.
+No live AWS account, no ffmpeg binary, no `deploy.sh`. Details are in `TESTING.md`.
 
 - `node:test` for the Lambdas. `awsMock.mjs` replaces `client.send` for startJob and uploadApi.
 - `unittest` for the worker and disc detect. S3 download and delete use a fake client. ffmpeg is checked as an argument list.

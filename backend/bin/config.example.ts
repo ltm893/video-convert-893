@@ -12,7 +12,8 @@ export const config = {
   // Cognito User Pool ID — same pool as dropbox-893 (API authorizer; no extra client).
   userPoolId: "us-east-1_XXXXXXXXX",
 
-  // Existing Dropbox private bucket — imported, never created or deleted.
+  // Private bucket from cognito-s3-stack-893 — imported, never created or deleted.
+  // Deploy dropbox-893 first. Users open the MP4 from the Dropbox file list.
   // CLI discs land in Videos/. Web uploads land in users/{cognito-sub}/Videos/.
   privateBucket: "your-id-here-private",
 };

@@ -62,6 +62,8 @@ run_step() {
   echo ""
 }
 
+run_step "base id" \
+  node --test backend/lib/baseId.test.mjs
 run_step "startJob ready-key" \
   node --test backend/lambda/startJob/parseReadyKey.test.mjs
 run_step "startJob handler" \

@@ -73,7 +73,20 @@ echo "  Ingest bucket:  $INGEST_BUCKET (created, retained)"
 echo "  CLI output:     Videos/"
 echo "  Web output:     users/{cognito-sub}/Videos/"
 echo ""
-echo "  Docker must be running (Fargate ffmpeg image)."
+
+echo "  Checking Docker (the Fargate image is built locally)..."
+if ! command -v docker >/dev/null 2>&1; then
+  echo "  ❌ Docker is not installed."
+  echo "     Install Docker, start it, and run this again."
+  exit 1
+fi
+if ! docker info >/dev/null 2>&1; then
+  echo "  ❌ Docker is not running."
+  echo "     Start Docker Desktop, or run: colima start"
+  echo "     Then run this script again."
+  exit 1
+fi
+echo "  ✅ Docker is running."
 echo ""
 
 echo "  Checking API Gateway '$API_NAME'..."

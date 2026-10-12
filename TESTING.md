@@ -2,7 +2,7 @@
 
 Last updated: 2026-10-10
 
-`./run_tests.sh` runs 55 tests. Lambda handlers stub `client.send`. The worker uses a fake S3 client. Nothing in the suite calls a live AWS account, ffmpeg, or `deploy.sh`.
+`./run_tests.sh` runs the unit tests. Lambda handlers stub `client.send`. The worker uses a fake S3 client. Nothing in the suite calls a live AWS account, ffmpeg, or `deploy.sh`. `backend/lib/baseId.test.mjs` checks that `id` comes from the base config and that an id already set on an add-on is kept.
 
 ---
 
@@ -14,7 +14,7 @@ Last updated: 2026-10-10
 ./run_tests.sh
 ```
 
-Runs the six unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
+Runs the unit-test files and prints a pass/fail line per file. Exits with code `1` if any file fails.
 
 The script:
 
@@ -28,6 +28,7 @@ GitHub Actions runs the same script on every push to `dev` or `main`, and on pul
 ### Direct
 
 ```bash
+node --test backend/lib/baseId.test.mjs
 node --test backend/lambda/startJob/parseReadyKey.test.mjs
 node --test backend/lambda/startJob/handler.test.mjs
 node --test backend/lambda/uploadApi/paths.test.mjs

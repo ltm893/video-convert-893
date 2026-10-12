@@ -1,6 +1,6 @@
 # video-convert-893
 
-CDK add-on that converts **family DVDs and videos** with ffmpeg on Fargate and writes MP4s into the existing Dropbox private bucket. Same pattern as **`pdf-search-893`**: ingest on the Mac or in the browser, AWS does the heavy work.
+CDK add-on that converts **family DVDs and videos** with ffmpeg on Fargate and writes MP4s into the private bucket from **`cognito-s3-stack-893`**. Deploy **`dropbox-893`** first. The site opens those files from the Dropbox file list. Same pattern as **`pdf-search-893`**: ingest on the Mac or in the browser, AWS does the heavy work.
 
 The physical disc still has to be read on your Mac. AWS cannot see the drive.
 
@@ -13,7 +13,7 @@ Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#
 | Repo | How this stack uses it |
 |------|------------------------|
 | `cognito-s3-stack-893` | Existing user pool |
-| `dropbox-893` | Private bucket where finished MP4s are written |
+| `dropbox-893` | Required. Users open the finished MP4 from the Dropbox file list. The private bucket itself comes from `cognito-s3-stack-893` |
 | `dliv-web` | Website that calls this API (`VIDEO_CONVERT_API_URL`) |
 
 ## What this deploys
@@ -25,7 +25,7 @@ Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#
 - Fargate ffmpeg worker
 - CloudWatch `/ecs/{id}-video-convert`
 
-Imported only (never created or deleted): Cognito User Pool and the Dropbox **private** bucket.
+Imported only (never created or deleted): Cognito User Pool and the **private** bucket. Deploy `dropbox-893` before this stack so users can open the MP4.
 
 ## Features
 
@@ -64,7 +64,7 @@ cp bin/config.example.ts bin/config.ts
 ./scripts/deploy.sh
 ```
 
-Docker is required on the deploy machine (Fargate image build). `deploy.sh` writes **`video_convert_outputs.json`** at the repo root (gitignored).
+Docker must be running on the deploy machine. `deploy.sh` checks that before it asks to proceed, because the Fargate image is built locally. It writes **`video_convert_outputs.json`** at the repo root (gitignored).
 
 ## Ingest a disc (CLI)
 
@@ -80,7 +80,7 @@ Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Vide
 ./run_tests.sh
 ```
 
-55 tests. Handlers stub DynamoDB, S3, and ECS. The worker fakes S3 and checks ffmpeg argument lists without running ffmpeg. What each test covers, and what still needs a real account or a disc, is in [TESTING.md](./TESTING.md). GitHub Actions runs the same script on `dev`, `main`, and pull requests.
+Handlers stub DynamoDB, S3, and ECS. The worker fakes S3 and checks ffmpeg argument lists without running ffmpeg. `baseId.test.mjs` checks that `id` comes from the base config. What each test covers, and what still needs a real account or a disc, is in [TESTING.md](./TESTING.md). GitHub Actions runs the same script on `dev`, `main`, and pull requests.
 
 ## Job statuses
 
@@ -100,7 +100,7 @@ Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Vide
 | `backend/scripts/ingest.sh` | Sync a mounted disc |
 | `backend/fixtures/jobs-to-supersede.json` | Shared supersede cases for the Lambda and the worker |
 | `backend/lambda/awsMock.mjs` | Stubs `client.send` in the handler tests |
-| `run_tests.sh` | 55 tests. Stubs AWS. Does not run ffmpeg |
+| `run_tests.sh` | Unit tests. Stubs AWS. Does not run ffmpeg |
 | `.github/workflows/test.yml` | Runs `./run_tests.sh` |
 | `TESTING.md` | What the suite covers and what stays manual |
 | `CONTEXT.md` | Maintainer notes |

@@ -1,7 +1,6 @@
 import * as fs from "fs";
 import * as path from "path";
-
-const PLACEHOLDER_ID = "your-id-here";
+import { resolveId, resolveRegion } from "../lib/baseId.cjs";
 
 export function baseConfigFile(): string {
   if (process.env.BASE_CONFIG_PATH) return process.env.BASE_CONFIG_PATH;
@@ -22,27 +21,22 @@ export function readBaseConfig(): { id: string; awsRegion: string } {
     );
   }
   const text = fs.readFileSync(file, "utf8");
-  const id = quotedField(text, "id");
-  const awsRegion = quotedField(text, "awsRegion");
-  if (!id || id === PLACEHOLDER_ID) {
-    throw new Error("Set id in " + file);
-  }
-  if (!awsRegion) {
-    throw new Error("Set awsRegion in " + file);
-  }
-  return { id, awsRegion };
+  return {
+    id: resolveId(undefined, quotedField(text, "id")),
+    awsRegion: resolveRegion(undefined, quotedField(text, "awsRegion")),
+  };
 }
 
 export function withBaseId<T extends { id?: string; awsRegion?: string }>(
   local: T
 ): T & { id: string; awsRegion: string } {
   const localId = (local.id ?? "").trim();
-  const keepLocalId = localId !== "" && localId !== PLACEHOLDER_ID;
   const localRegion = (local.awsRegion ?? "").trim();
-  const base = keepLocalId && localRegion ? null : readBaseConfig();
+  const needsBase = !localId || localId === "your-id-here" || !localRegion;
+  const base = needsBase ? readBaseConfig() : null;
   return {
     ...local,
-    id: keepLocalId ? localId : base!.id,
-    awsRegion: localRegion || base!.awsRegion,
+    id: resolveId(local.id, base?.id),
+    awsRegion: resolveRegion(local.awsRegion, base?.awsRegion),
   };
 }
