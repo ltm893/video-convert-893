@@ -1,9 +1,44 @@
+import json
 import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
 
 import convert
+
+SUPERSEDE_FIXTURE = json.loads(
+    (Path(__file__).resolve().parents[1] / "fixtures" / "jobs-to-supersede.json").read_text()
+)
+
+
+def superseded_ids(name):
+    row = next(item for item in SUPERSEDE_FIXTURE if item["name"] == name)
+    gone = convert.jobs_to_supersede(row["items"])
+    return [item["jobId"] for item in gone], row["superseded"]
+
+
+class FakeS3:
+    def __init__(self, pages):
+        self.pages = pages
+        self.downloads = []
+        self.deletes = []
+
+    def get_paginator(self, name):
+        assert name == "list_objects_v2"
+        pages = self.pages
+
+        class Paginator:
+            def paginate(self, **_kwargs):
+                return pages
+
+        return Paginator()
+
+    def download_file(self, bucket, key, path):
+        self.downloads.append((bucket, key, path))
+        Path(path).write_bytes(b"vob")
+
+    def delete_objects(self, Bucket, Delete):
+        self.deletes.append((Bucket, Delete["Objects"]))
 
 
 class DetectJobsTest(unittest.TestCase):
@@ -70,6 +105,55 @@ class EditCommandTest(unittest.TestCase):
         loud = convert.ffmpeg_normalize_command(src, out, True)
         self.assertNotIn("anullsrc=channel_layout=stereo:sample_rate=48000", loud)
 
+    def test_audio_commands_copy_mp3_and_encode_other(self):
+        out = Path("/tmp/out.mp3")
+        mp3 = convert.ffmpeg_audio_commands(Path("/tmp/01 Song.mp3"), out)
+        self.assertEqual(mp3[0][mp3[0].index("-c:a") + 1], "copy")
+        wav = convert.ffmpeg_audio_commands(Path("/tmp/01 Audio Track.wav"), out)[0]
+        aiff = convert.ffmpeg_audio_commands(Path("/tmp/02 Audio Track.aiff"), out)[0]
+        self.assertEqual(wav[wav.index("-c:a") + 1], "libmp3lame")
+        self.assertEqual(wav[wav.index("-b:a") + 1], "192k")
+        self.assertIn("title=01 Audio Track", wav)
+        self.assertEqual(aiff[aiff.index("-c:a") + 1], "libmp3lame")
+        self.assertEqual(aiff[aiff.index("-b:a") + 1], "192k")
+        self.assertIn("title=02 Audio Track", aiff)
+
+    def test_s3_download_skips_the_ready_marker(self):
+        with tempfile.TemporaryDirectory() as raw:
+            dest = Path(raw)
+            s3 = FakeS3([{
+                "Contents": [
+                    {"Key": "incoming/disc/"},
+                    {"Key": "incoming/disc/ready"},
+                    {"Key": "incoming/disc/VIDEO_TS/VTS_01_1.VOB"},
+                ],
+            }])
+            convert.s3_download_prefix(s3, "ingest", "incoming/disc/", dest)
+            self.assertEqual(
+                s3.downloads,
+                [("ingest", "incoming/disc/VIDEO_TS/VTS_01_1.VOB", str(dest / "VIDEO_TS" / "VTS_01_1.VOB"))],
+            )
+            self.assertEqual((dest / "VIDEO_TS" / "VTS_01_1.VOB").read_bytes(), b"vob")
+
+    def test_s3_delete_batches_at_1000_keys(self):
+        keys = [{"Key": f"incoming/disc/{index}.vob"} for index in range(1001)]
+        s3 = FakeS3([{"Contents": keys}])
+        convert.s3_delete_prefix(s3, "ingest", "incoming/disc/")
+        self.assertEqual(len(s3.deletes), 2)
+        self.assertEqual(s3.deletes[0][0], "ingest")
+        self.assertEqual(len(s3.deletes[0][1]), 1000)
+        self.assertEqual(s3.deletes[1][1], [{"Key": "incoming/disc/1000.vob"}])
+
+    def test_formatted_api_clip_times_pass_ffmpeg_check(self):
+        # formatMediaTimestamp output. This is the string the API stores and Fargate receives.
+        for text in ("0:01:30", "0:01:30.5", "1:02:15"):
+            self.assertEqual(convert.safe_ffmpeg_time(text), text)
+        # Raw "1:30.5" is rejected here; the API formats it to "0:01:30.5" first.
+        # Raw "24:00:01" matches this regex; the API rejects it and never stores it.
+        with self.assertRaises(RuntimeError):
+            convert.safe_ffmpeg_time("1:30.5")
+        self.assertEqual(convert.safe_ffmpeg_time("24:00:01"), "24:00:01")
+
     def test_concat_list_escapes_quotes(self):
         with tempfile.TemporaryDirectory() as raw:
             folder = Path(raw)
@@ -80,11 +164,16 @@ class EditCommandTest(unittest.TestCase):
             self.assertIn("libx264", encode)
 
     def test_queued_edit_is_not_superseded(self):
-        gone = convert.jobs_to_supersede([
-            {"jobId": "clip", "filename": "Race-highlight.mp4", "status": "QUEUED", "createdAt": "2026-10-05T14:00:00Z"},
-            {"jobId": "old", "filename": "Race-highlight", "status": "READY", "createdAt": "2026-10-01T10:00:00Z"},
-        ])
-        self.assertEqual(gone, [])
+        gone, expected = superseded_ids("queuedEdit")
+        self.assertEqual(gone, expected)
+
+    def test_reconvert_supersedes_only_the_older_same_name_job(self):
+        gone, expected = superseded_ids("reconvert")
+        self.assertEqual(gone, expected)
+
+    def test_same_timestamp_keeps_the_greater_job_id(self):
+        gone, expected = superseded_ids("sameTimestamp")
+        self.assertEqual(gone, expected)
 
 
 class ConversionLogTest(unittest.TestCase):

@@ -297,21 +297,9 @@ def run_ffmpeg(inputs: list[Path], output: Path, concat: bool) -> None:
     raise RuntimeError("\n".join(err[-8:]) if err else "ffmpeg failed")
 
 
-def run_ffmpeg_audio(inputs: list[Path], output: Path) -> None:
-    output.parent.mkdir(parents=True, exist_ok=True)
-    src = inputs[0]
+def ffmpeg_audio_commands(src: Path, output: Path) -> list[list[str]]:
     title = src.stem
-    if src.suffix.lower() == ".mp3":
-        cmd = [
-            "ffmpeg", "-y", "-hide_banner", "-i", str(src),
-            "-map", "0:a:0", "-c:a", "copy",
-            str(output),
-        ]
-        log("ffmpeg", " ".join(cmd))
-        proc = subprocess.run(cmd, capture_output=True, text=True)
-        if proc.returncode == 0 and output.exists() and output.stat().st_size > 0:
-            return
-    cmd = [
+    encode = [
         "ffmpeg", "-y", "-hide_banner", "-i", str(src),
         "-map", "0:a:0",
         "-c:a", "libmp3lame", "-b:a", "192k",
@@ -319,12 +307,27 @@ def run_ffmpeg_audio(inputs: list[Path], output: Path) -> None:
         "-metadata", f"title={title}",
         str(output),
     ]
-    log("ffmpeg", " ".join(cmd))
-    proc = subprocess.run(cmd, capture_output=True, text=True)
-    if proc.returncode == 0 and output.exists() and output.stat().st_size > 0:
-        return
-    err = (proc.stderr or "ffmpeg failed").strip().splitlines()
-    raise RuntimeError("\n".join(err[-8:]) if err else "ffmpeg audio failed")
+    if src.suffix.lower() != ".mp3":
+        return [encode]
+    copy = [
+        "ffmpeg", "-y", "-hide_banner", "-i", str(src),
+        "-map", "0:a:0", "-c:a", "copy",
+        str(output),
+    ]
+    return [copy, encode]
+
+
+def run_ffmpeg_audio(inputs: list[Path], output: Path) -> None:
+    output.parent.mkdir(parents=True, exist_ok=True)
+    last_err = "ffmpeg audio failed"
+    for cmd in ffmpeg_audio_commands(inputs[0], output):
+        log("ffmpeg", " ".join(cmd))
+        proc = subprocess.run(cmd, capture_output=True, text=True)
+        if proc.returncode == 0 and output.exists() and output.stat().st_size > 0:
+            return
+        err = (proc.stderr or "ffmpeg failed").strip().splitlines()
+        last_err = "\n".join(err[-8:]) if err else "ffmpeg audio failed"
+    raise RuntimeError(last_err)
 
 
 def s3_download_prefix(s3, bucket: str, prefix: str, dest: Path) -> None:

@@ -2,7 +2,10 @@
 import "source-map-support/register";
 import * as cdk from "aws-cdk-lib";
 import { VideoConvertStack } from "../lib/video-convert-stack";
-import { config } from "./config";
+import { withBaseId } from "./baseConfig";
+import { config as localConfig } from "./config";
+
+const config = withBaseId(localConfig);
 
 const app = new cdk.App();
 const stackName = `VideoConvertStack-${config.id}`;

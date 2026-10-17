@@ -1,4 +1,5 @@
 #!/usr/bin/env python3
+import json
 import sys
 import tempfile
 import unittest
@@ -6,6 +7,10 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "worker"))
 from convert import detect_jobs, ffmpeg_error_is_css, ffmpeg_input_args, jobs_to_supersede, slug_filename, vob_title_groups
+
+SUPERSEDE_FIXTURE = json.loads(
+    (Path(__file__).resolve().parents[1] / "fixtures" / "jobs-to-supersede.json").read_text()
+)
 
 
 class DetectTests(unittest.TestCase):
@@ -98,13 +103,9 @@ class DetectTests(unittest.TestCase):
         self.assertEqual(ffmpeg_input_args([a], True), ["-i", "/tmp/VTS_01_1.VOB"])
 
     def test_jobs_to_supersede_waits_until_ready(self):
-        gone = jobs_to_supersede([
-            {"jobId": "new", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-09-30T10:00:00Z"},
-            {"jobId": "old", "filename": "CampingDragRacing", "status": "READY", "createdAt": "2026-09-28T10:00:00Z"},
-            {"jobId": "busy", "filename": "TrentonHS", "status": "CONVERTING", "createdAt": "2026-09-30T11:00:00Z"},
-            {"jobId": "busy-old", "filename": "TrentonHS", "status": "READY", "createdAt": "2026-09-29T10:00:00Z"},
-        ])
-        self.assertEqual([item["jobId"] for item in gone], ["old"])
+        for row in SUPERSEDE_FIXTURE:
+            gone = [item["jobId"] for item in jobs_to_supersede(row["items"])]
+            self.assertEqual(gone, row["superseded"], row["name"])
 
 
 if __name__ == "__main__":

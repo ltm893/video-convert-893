@@ -1,18 +1,12 @@
 # CONTEXT.md — video-convert-893
-# Last updated: 2026-09-25
+# Last updated: 2026-10-10
 
 ## What this repo is
 Standalone add-on for cognito-s3-stack-893.
-Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on Fargate, and drop MP4s into the existing Dropbox private bucket under `Videos/`.
+Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on Fargate, and drop MP4s into the private bucket under `Videos/`. Deploy `dropbox-893` first. Users open the finished file from the Dropbox file list.
 
 ## Part of the add-on family
-| Repo | Description |
-|------|-------------|
-| `cognito-s3-stack-893` | Base: Cognito + S3 |
-| `dropbox-893` | Private file manager — MP4s land in this bucket |
-| `pdf-search-893` | OCR PDF search |
-| `video-convert-893` | DVD / video ingest + convert + clip/combine — **this repo** |
-| `dliv-web` | Personal dliv.com frontend |
+Full map: [cognito-s3-stack-893](https://github.com/ltm893/cognito-s3-stack-893#repo-family). This stack uses the Cognito user pool, writes MP4s into the private bucket, and needs `dropbox-893` so the site can open them. `dliv-web` calls it through `VIDEO_CONVERT_API_URL`.
 
 ## What this stack owns
 - S3 ingest bucket (`{id}-video-ingest`, retained)
@@ -24,7 +18,7 @@ Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on 
 
 ## What this stack imports (never creates or deletes)
 - Cognito User Pool — from `config.ts` (same family pool; no extra app client)
-- S3 private Dropbox bucket — from `config.ts` (`Videos/` prefix only)
+- S3 private bucket — from `config.ts` (`Videos/` prefix only). Users open the MP4 through `dropbox-893`.
 
 ## Personal deployment (dliv.com)
 - Stack: `VideoConvertStack-videoconvert893`
@@ -35,12 +29,29 @@ Ingest family DVD folders into a private S3 bucket, convert them with ffmpeg on 
 ```bash
 cd backend
 cp bin/config.example.ts bin/config.ts
-# edit config.ts
+# set userPoolId and privateBucket
+# id comes from the sibling cognito-s3-stack-893/base/bin/config.ts
 ./scripts/deploy.sh
 ./scripts/ingest.sh "/Volumes/DVD Video Recording"
 ```
 
 Writes `video_convert_outputs.json` at repo root (gitignored).
+
+## Tests
+
+```bash
+./run_tests.sh
+```
+
+No live AWS account, no ffmpeg binary, no `deploy.sh`. Details are in `TESTING.md`.
+
+- `node:test` for the Lambdas. `awsMock.mjs` replaces `client.send` for startJob and uploadApi.
+- `unittest` for the worker and disc detect. S3 download and delete use a fake client. ffmpeg is checked as an argument list.
+- `backend/fixtures/jobs-to-supersede.json` is the one supersede list. The Lambda, the worker, and disc detect all read it.
+- Clip times are asserted as the formatted string Fargate receives (`1:30.5` → `0:01:30.5`).
+- GitHub Actions (`.github/workflows/test.yml`) runs `./run_tests.sh` on `dev`, `main`, and pull requests.
+
+Presigned part URLs, `deploy.sh`, `ingest.sh`, and a real encode stay manual.
 
 ## Structure
 ```
@@ -50,9 +61,15 @@ video-convert-893/
 │   ├── bin/config.ts            ← gitignored
 │   ├── bin/config.example.ts
 │   ├── lib/video-convert-stack.ts
-│   ├── lambda/startJob/
-│   ├── worker/                  ← Fargate ffmpeg image
-│   └── scripts/deploy.sh ingest.sh
+│   ├── fixtures/jobs-to-supersede.json
+│   ├── lambda/awsMock.mjs
+│   ├── lambda/startJob/         ← handler plus parseReadyKey and handler tests
+│   ├── lambda/uploadApi/        ← paths and handler tests
+│   ├── worker/                  ← Fargate image, convert.py, convert_test.py
+│   └── scripts/deploy.sh ingest.sh test_detect.py
+├── run_tests.sh
+├── TESTING.md
+├── .github/workflows/test.yml
 ├── video_convert_outputs.json   ← gitignored
 ├── CONTEXT.md
 └── README.md
