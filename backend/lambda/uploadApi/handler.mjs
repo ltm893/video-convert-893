@@ -34,6 +34,7 @@ import {
   safeRelPath,
   slugName,
   buildEditPlan,
+  videoFileOutputPrefix,
 } from "./paths.mjs";
 
 export const s3 = new S3Client({});
@@ -267,6 +268,7 @@ async function initiateDiscFile(userId, body) {
 async function initiateVideoFile(userId, body) {
   const filename = safeVideoName(body.filename || body.key);
   const contentType = String(body.contentType || "application/octet-stream");
+  const outputPrefix = videoFileOutputPrefix(userId, body.outputPrefix);
   const jobId = randomUUID();
   const key = `incoming/${userId}/${jobId}/${filename}`;
   const started = await s3.send(new CreateMultipartUploadCommand({
@@ -287,7 +289,7 @@ async function initiateVideoFile(userId, body) {
       kind: "file",
       filename,
       ingestKey: `incoming/${userId}/${jobId}/`,
-      outputPrefix: `users/${userId}/Videos/`,
+      outputPrefix,
       status: "UPLOADING",
       createdAt: now,
       updatedAt: now,
@@ -299,6 +301,7 @@ async function initiateVideoFile(userId, body) {
     jobId,
     filename,
     contentType,
+    outputPrefix,
   });
 }
 
