@@ -357,6 +357,26 @@ export function formatMediaTimestamp(seconds) {
   return `${h}:${pad(m)}:${pad(s)}${frac}`;
 }
 
+export function videoFileOutputPrefix(userId, raw) {
+  const root = `users/${userId}/Videos/`;
+  const text = String(raw || "").replace(/^\/+/, "").trim();
+  if (!text) return root;
+  const prefix = text.endsWith("/") ? text : `${text}/`;
+  if (prefix === root) return root;
+  if (!prefix.startsWith(root)) {
+    const err = new Error("Choose a folder in your Videos library.");
+    err.statusCode = 400;
+    throw err;
+  }
+  const parts = prefix.split("/").filter(Boolean);
+  if (parts.some((part) => part === "." || part === "..") || parts.length < 4 || parts.length > 16) {
+    const err = new Error("Choose a folder in your Videos library.");
+    err.statusCode = 400;
+    throw err;
+  }
+  return prefix;
+}
+
 export function ownedMineVideoKey(userId, raw) {
   const key = ownedUserFileKey(userId, raw);
   const root = `users/${userId}/Videos/`;

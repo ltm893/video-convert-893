@@ -15,6 +15,7 @@ import {
   replaceOutputKey,
   safeRelPath,
   buildEditPlan,
+  videoFileOutputPrefix,
   parseMediaTimestamp,
   formatMediaTimestamp,
 } from "./paths.mjs";
@@ -30,6 +31,17 @@ function supersededIds(name) {
   const row = supersedeFixture.find((item) => item.name === name);
   return jobsToSupersede(row.items).map((job) => job.jobId);
 }
+
+test("a video file lands in the Videos folder it was uploaded from", () => {
+  const root = `users/${userId}/Videos/`;
+  const folder = `${root}TaylorsGang/`;
+  assert.equal(videoFileOutputPrefix(userId, ""), root);
+  assert.equal(videoFileOutputPrefix(userId, folder), folder);
+  assert.equal(videoFileOutputPrefix(userId, `${root}TaylorsGang`), folder);
+  assert.throws(() => videoFileOutputPrefix(userId, `users/${userId}/Photos/Trip/`), /Videos library/);
+  assert.throws(() => videoFileOutputPrefix(userId, "Videos/TaylorsGang/"), /Videos library/);
+  assert.throws(() => videoFileOutputPrefix(userId, `${root}../Photos/`), /Videos library/);
+});
 
 test("owned disc keys may be nested under the job prefix", () => {
   const parsed = parseOwnedKey(userId, `incoming/${userId}/${jobId}/VIDEO_TS/VTS_01_1.VOB`);

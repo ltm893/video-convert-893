@@ -33,7 +33,7 @@ Imported only (never created or deleted): Cognito User Pool and the **private** 
 - One Fargate job per disc (not one job per `.VOB`)
 - Detects `VIDEO_TS`, DVD-VR (`VIDEO_RM` / `.VRO`), or already-made video files
 - CLI discs → `s3://{privateBucket}/Videos/{name}.mp4`
-- Web uploads → `s3://{privateBucket}/users/{sub}/Videos/`
+- Web uploads → `s3://{privateBucket}/users/{sub}/Videos/`, or the Videos folder the upload started in
 - **Clip** — extract a time range from an MP4 already in Mine → Videos
 - **Combine** — join MP4s already in Mine → Videos into one new file
 - Deletes the ingest prefix after a successful convert
