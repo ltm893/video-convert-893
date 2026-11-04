@@ -165,7 +165,7 @@ These need the real account, a mounted disc, or a long ffmpeg encode. They stay 
 |-------|------|
 | `./scripts/deploy.sh` | After a stack change. Docker builds the Fargate image. |
 | `./scripts/ingest.sh "/Volumes/…"` | A real home-recorded disc on the Mac. |
-| One clip and one combine from dliv | After an API or worker change, against Mine → Videos. A clip from All DLIV Users → Videos saves the new MP4 in Mine → Videos. |
+| One clip and one combine from dliv | After an API or worker change, against Mine → Videos. A clip from All DLIV Users → Videos saves the new MP4 in that same shared folder. |
 | CSS commercial disc | Confirm the worker marks the job `FAILED` and leaves the private bucket alone. |
 | CDK synth | `config.ts` is gitignored, so a snapshot of the template is a local check, not a CI artifact. |
 | `POST /uploads/parts` | Presigned part URLs go through the AWS signer. The other upload routes are covered with a stubbed `send`. |

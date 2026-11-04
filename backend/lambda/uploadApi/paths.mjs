@@ -410,6 +410,15 @@ export function clipSourceKey(userId, raw) {
   return sharedLibraryVideoKey(key);
 }
 
+export function combineSourceKey(userId, raw, library) {
+  const key = String(raw || "").replace(/^\/+/, "");
+  const shared = key.startsWith("Videos/") && !key.startsWith("users/");
+  if (library === "mine" && shared) badRequest("Choose MP4s from Mine → Videos.");
+  if (library === "shared" && !shared) badRequest("Choose MP4s from All DLIV Users → Videos.");
+  if (shared) return { key: sharedLibraryVideoKey(key), library: "shared" };
+  return { key: ownedMineVideoKey(userId, key), library: "mine" };
+}
+
 export function editOutputFilename(raw, fallback = "") {
   const typed = String(raw || "").trim() || String(fallback || "").trim();
   const name = slugName(typed, "").replace(/\.(mp4|m4v)$/i, "");
@@ -426,8 +435,15 @@ export function buildEditPlan(userId, body) {
   if (kind === "combine" && rawKeys.length < 2) badRequest("Choose at least two MP4s.");
   if (rawKeys.length > MAX_COMBINE_SOURCES) badRequest("Combine up to 20 MP4s.");
   const sourceKeys = [];
+  let library = "";
   for (const raw of rawKeys) {
-    const key = kind === "clip" ? clipSourceKey(userId, raw) : ownedMineVideoKey(userId, raw);
+    let key;
+    if (kind === "clip") key = clipSourceKey(userId, raw);
+    else {
+      const picked = combineSourceKey(userId, raw, library);
+      key = picked.key;
+      library = picked.library;
+    }
     if (sourceKeys.includes(key)) badRequest("That MP4 is already in the list.");
     sourceKeys.push(key);
   }
@@ -445,9 +461,12 @@ export function buildEditPlan(userId, body) {
   const filename = editOutputFilename(body?.name || body?.filename, fallback);
   const mineRoot = `users/${userId}/Videos/`;
   const folders = sourceKeys.map((key) => key.slice(0, key.lastIndexOf("/") + 1));
-  const outputPrefix = folders.every((folder) => folder === folders[0] && folder.startsWith(mineRoot))
-    ? folders[0]
-    : mineRoot;
+  const folder = folders[0] || mineRoot;
+  const sameFolder = folders.every((item) => item === folder);
+  const allShared = sourceKeys.every((key) => key.startsWith("Videos/") && !key.startsWith("users/"));
+  const sharedFolder = folder.startsWith("Videos/") && !folder.startsWith("users/");
+  let outputPrefix = allShared ? "Videos/" : mineRoot;
+  if (sameFolder && (folder.startsWith(mineRoot) || (allShared && sharedFolder))) outputPrefix = folder;
   const outputKey = `${outputPrefix}${filename}`;
   if (sourceKeys.includes(outputKey)) badRequest("Choose a new file name.");
   return { kind, sourceKeys, clipStart, clipEnd, filename, outputPrefix, outputKey };
