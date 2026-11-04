@@ -181,6 +181,37 @@ test("clip and combine plans stay inside Mine Videos and keep the sources", () =
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "5", end: "1", name: "nope" }), /after the start/);
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "0", end: "1", name: "Race" }), /new file name/);
   assert.throws(() => buildEditPlan(userId, { kind: "combine", sourceKeys: [race], name: "One" }), /at least two/);
+
+  const shared = "Videos/Wenner2026/Camping/Race.mp4";
+  const sharedClip = buildEditPlan(userId, {
+    kind: "clip",
+    sourceKey: shared,
+    start: "0:10",
+    end: "0:40",
+    name: "Race highlight",
+  });
+  assert.deepEqual(sharedClip.sourceKeys, [shared]);
+  assert.equal(sharedClip.outputPrefix, "Videos/Wenner2026/Camping/");
+  assert.equal(sharedClip.outputKey, "Videos/Wenner2026/Camping/Race-highlight.mp4");
+  const sharedRoot = buildEditPlan(userId, {
+    kind: "clip",
+    sourceKey: "Videos/WyceAcresSledRide.mp4",
+    start: "0:10",
+    end: "0:40",
+    name: "Sled highlight",
+  });
+  assert.equal(sharedRoot.outputPrefix, "Videos/");
+  assert.equal(sharedRoot.outputKey, "Videos/Sled-highlight.mp4");
+  assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: "Photos/Family/a.mp4", start: "0", end: "1" }), /All DLIV Users/);
+  assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: "Videos/../secret.mp4", start: "0", end: "1" }), /All DLIV Users/);
+  assert.throws(() => buildEditPlan(userId, { kind: "combine", sourceKeys: [shared, race], name: "Weekend" }), /All DLIV Users/);
+  const sharedCombined = buildEditPlan(userId, {
+    kind: "combine",
+    sourceKeys: ["Videos/TaylorsGang/a.mp4", "Videos/TaylorsGang/b.mp4"],
+    name: "Weekend",
+  });
+  assert.equal(sharedCombined.outputPrefix, "Videos/TaylorsGang/");
+  assert.equal(sharedCombined.outputKey, "Videos/TaylorsGang/Weekend.mp4");
 });
 
 test("clip times format to the H:MM:SS string Fargate receives", () => {

@@ -583,9 +583,11 @@ def safe_ffmpeg_time(value: str) -> str:
 
 def safe_source_key(user_id: str, key: str) -> str:
     text = str(key or "").replace("\\", "/")
-    prefix = f"users/{user_id}/Videos/"
+    mine = f"users/{user_id}/Videos/"
     parts = text.split("/")
-    if not user_id or not text.startswith(prefix) or any(part in ("", ".", "..") for part in parts):
+    in_mine = bool(user_id) and text.startswith(mine)
+    in_shared = text.startswith("Videos/") and not text.startswith("users/")
+    if not (in_mine or in_shared) or any(part in ("", ".", "..") for part in parts):
         raise RuntimeError("invalid source")
     if not text.lower().endswith((".mp4", ".m4v")):
         raise RuntimeError("invalid source")

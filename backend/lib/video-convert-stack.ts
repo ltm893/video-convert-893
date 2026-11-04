@@ -125,7 +125,10 @@ export class VideoConvertStack extends cdk.Stack {
     table.grantReadWriteData(taskDef.taskRole);
     taskDef.taskRole.addToPrincipalPolicy(new iam.PolicyStatement({
       actions: ["s3:GetObject"],
-      resources: [`${privateBucket.bucketArn}/users/*/Videos/*`],
+      resources: [
+        `${privateBucket.bucketArn}/users/*/Videos/*`,
+        `${privateBucket.bucketArn}/Videos/*`,
+      ],
     }));
     taskDef.taskRole.addToPrincipalPolicy(new iam.PolicyStatement({
       actions: ["s3:PutObject", "s3:AbortMultipartUpload", "s3:ListMultipartUploadParts"],
