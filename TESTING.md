@@ -126,7 +126,7 @@ The first three return before any AWS call. The rest stub `ddb.send` and `s3.sen
 | Audio folder | `.aiff` tracks become numbered `.mp3` names, sorted 1, 2, 10 |
 | VIDEO_TS wins | A disc with both VOBs and audio is a video job |
 | Dated CD folder | Audio lands in `Music/CD{date}-N/`, and a prefix that is already an album is left alone |
-| Clip command | Source keys stay under Mine Videos; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
+| Clip command | Mine Videos and All DLIV Users `Videos/` keys are allowed; other libraries, `..`, and another user's Videos are rejected; ffmpeg times are passed through; a `;` in a time is rejected; silent vs loud normalize commands differ |
 | Formatted clip times | `0:01:30`, `0:01:30.5`, and `1:02:15` pass `safe_ffmpeg_time`. Raw `1:30.5` is rejected here; raw `24:00:01` is accepted here |
 | Audio command | `.mp3` uses `-c:a copy`. `.wav` and `.aiff` use `libmp3lame`, `192k`, and a title tag. ffmpeg is not run |
 | S3 download | A fake client skips the folder marker and `ready`, and downloads the VOB |
@@ -165,7 +165,7 @@ These need the real account, a mounted disc, or a long ffmpeg encode. They stay 
 |-------|------|
 | `./scripts/deploy.sh` | After a stack change. Docker builds the Fargate image. |
 | `./scripts/ingest.sh "/Volumes/…"` | A real home-recorded disc on the Mac. |
-| One clip and one combine from dliv | After an API or worker change, against Mine → Videos. |
+| One clip and one combine from dliv | After an API or worker change, against Mine → Videos. A clip from All DLIV Users → Videos saves the new MP4 in Mine → Videos. |
 | CSS commercial disc | Confirm the worker marks the job `FAILED` and leaves the private bucket alone. |
 | CDK synth | `config.ts` is gitignored, so a snapshot of the template is a local check, not a CI artifact. |
 | `POST /uploads/parts` | Presigned part URLs go through the AWS signer. The other upload routes are covered with a stubbed `send`. |

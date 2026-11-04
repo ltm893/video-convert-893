@@ -181,6 +181,21 @@ test("clip and combine plans stay inside Mine Videos and keep the sources", () =
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "5", end: "1", name: "nope" }), /after the start/);
   assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: race, start: "0", end: "1", name: "Race" }), /new file name/);
   assert.throws(() => buildEditPlan(userId, { kind: "combine", sourceKeys: [race], name: "One" }), /at least two/);
+
+  const shared = "Videos/Wenner2026/Camping/Race.mp4";
+  const sharedClip = buildEditPlan(userId, {
+    kind: "clip",
+    sourceKey: shared,
+    start: "0:10",
+    end: "0:40",
+    name: "Race highlight",
+  });
+  assert.deepEqual(sharedClip.sourceKeys, [shared]);
+  assert.equal(sharedClip.outputPrefix, `users/${userId}/Videos/`);
+  assert.equal(sharedClip.outputKey, `users/${userId}/Videos/Race-highlight.mp4`);
+  assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: "Photos/Family/a.mp4", start: "0", end: "1" }), /All DLIV Users/);
+  assert.throws(() => buildEditPlan(userId, { kind: "clip", sourceKey: "Videos/../secret.mp4", start: "0", end: "1" }), /All DLIV Users/);
+  assert.throws(() => buildEditPlan(userId, { kind: "combine", sourceKeys: [shared, race], name: "Weekend" }), /Mine/);
 });
 
 test("clip times format to the H:MM:SS string Fargate receives", () => {

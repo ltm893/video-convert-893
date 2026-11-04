@@ -378,12 +378,36 @@ export function videoFileOutputPrefix(userId, raw) {
 }
 
 export function ownedMineVideoKey(userId, raw) {
-  const key = ownedUserFileKey(userId, raw);
+  const key = String(raw || "").replace(/^\/+/, "");
   const root = `users/${userId}/Videos/`;
   if (!key.startsWith(root)) badRequest("Choose an MP4 in Mine → Videos.");
+  ownedUserFileKey(userId, key);
   const ext = extensionOf(key);
   if (ext !== "mp4" && ext !== "m4v") badRequest("Choose an MP4.");
   return key;
+}
+
+export function sharedLibraryVideoKey(raw) {
+  const key = String(raw || "").replace(/^\/+/, "");
+  const parts = key.split("/");
+  const ext = extensionOf(key);
+  if (
+    !key.startsWith("Videos/")
+    || key.endsWith("/")
+    || parts.some((part) => part === "." || part === ".." || !part)
+    || parts.length < 2
+    || parts.length > 16
+    || (ext !== "mp4" && ext !== "m4v")
+  ) {
+    badRequest("Choose an MP4 in All DLIV Users → Videos.");
+  }
+  return key;
+}
+
+export function clipSourceKey(userId, raw) {
+  const key = String(raw || "").replace(/^\/+/, "");
+  if (userId && key.startsWith(`users/${userId}/`)) return ownedMineVideoKey(userId, key);
+  return sharedLibraryVideoKey(key);
 }
 
 export function editOutputFilename(raw, fallback = "") {
@@ -403,7 +427,7 @@ export function buildEditPlan(userId, body) {
   if (rawKeys.length > MAX_COMBINE_SOURCES) badRequest("Combine up to 20 MP4s.");
   const sourceKeys = [];
   for (const raw of rawKeys) {
-    const key = ownedMineVideoKey(userId, raw);
+    const key = kind === "clip" ? clipSourceKey(userId, raw) : ownedMineVideoKey(userId, raw);
     if (sourceKeys.includes(key)) badRequest("That MP4 is already in the list.");
     sourceKeys.push(key);
   }
@@ -419,10 +443,11 @@ export function buildEditPlan(userId, body) {
   const sourceName = sourceKeys[0].split("/").pop().replace(/\.(mp4|m4v)$/i, "");
   const fallback = kind === "clip" ? `${sourceName}-clip` : `${sourceName}-combined`;
   const filename = editOutputFilename(body?.name || body?.filename, fallback);
+  const mineRoot = `users/${userId}/Videos/`;
   const folders = sourceKeys.map((key) => key.slice(0, key.lastIndexOf("/") + 1));
-  const outputPrefix = folders.every((folder) => folder === folders[0])
+  const outputPrefix = folders.every((folder) => folder === folders[0] && folder.startsWith(mineRoot))
     ? folders[0]
-    : `users/${userId}/Videos/`;
+    : mineRoot;
   const outputKey = `${outputPrefix}${filename}`;
   if (sourceKeys.includes(outputKey)) badRequest("Choose a new file name.");
   return { kind, sourceKeys, clipStart, clipEnd, filename, outputPrefix, outputKey };

@@ -89,9 +89,17 @@ class EditCommandTest(unittest.TestCase):
         user = "11111111-2222-3333-4444-555555555555"
         key = f"users/{user}/Videos/Race.mp4"
         self.assertEqual(convert.safe_source_key(user, key), key)
+        shared = "Videos/Wenner2026/Camping/Race.mp4"
+        self.assertEqual(convert.safe_source_key(user, shared), shared)
         self.assertEqual(convert.safe_ffmpeg_time("0:01:30.5"), "0:01:30.5")
         with self.assertRaises(RuntimeError):
             convert.safe_source_key(user, f"users/{user}/Photos/Race.mp4")
+        with self.assertRaises(RuntimeError):
+            convert.safe_source_key(user, "Photos/Family/Race.mp4")
+        with self.assertRaises(RuntimeError):
+            convert.safe_source_key(user, "Videos/../secret.mp4")
+        with self.assertRaises(RuntimeError):
+            convert.safe_source_key(user, "users/someone-else/Videos/Race.mp4")
         with self.assertRaises(RuntimeError):
             convert.safe_ffmpeg_time("1:30; rm")
         src = Path("/tmp/in.mp4")
