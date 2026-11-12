@@ -1,0 +1,38 @@
+#!/usr/bin/env bash
+# Run this repo's tests before a branch is pushed. SKIP_TESTS=1 skips them.
+set -euo pipefail
+
+if [ "${SKIP_TESTS:-}" = "1" ]; then
+  exit 0
+fi
+
+root=$(cd "$(dirname "$0")/../.." && pwd)
+cd "$root"
+
+saw_line=0
+saw_update=0
+if [ ! -t 0 ]; then
+  while read -r local_ref local_sha _remote_ref _remote_sha; do
+    [ -n "${local_ref:-}" ] || continue
+    saw_line=1
+    if [ "$local_sha" != "0000000000000000000000000000000000000000" ]; then
+      saw_update=1
+    fi
+  done
+fi
+if [ "$saw_line" -eq 1 ] && [ "$saw_update" -eq 0 ]; then
+  exit 0
+fi
+
+export PATH="/opt/homebrew/bin:${PATH:-/usr/bin:/bin}"
+if ! command -v node >/dev/null 2>&1 && [ -s "$HOME/.nvm/nvm.sh" ]; then
+  # shellcheck disable=SC1090
+  . "$HOME/.nvm/nvm.sh"
+fi
+if ! command -v node >/dev/null 2>&1; then
+  echo "node is not on PATH, so the tests cannot run." >&2
+  exit 1
+fi
+
+echo "Running tests before push..."
+./run_tests.sh
