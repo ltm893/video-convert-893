@@ -80,7 +80,9 @@ Eject, next disc. The MP4 shows up in dliv **Dropbox → All DLIV Users → Vide
 ./run_tests.sh
 ```
 
-Handlers stub DynamoDB, S3, and ECS. The worker fakes S3 and checks ffmpeg argument lists without running ffmpeg. `baseId.test.mjs` checks that `id` comes from the base config. What each test covers, and what still needs a real account or a disc, is in [TESTING.md](./TESTING.md). GitHub Actions runs the same script on `dev`, `main`, and pull requests.
+Handlers stub DynamoDB, S3, and ECS. The worker fakes S3 and checks ffmpeg argument lists without running ffmpeg. `baseId.test.mjs` checks that `id` comes from the base config. What each test covers, and what still needs a real account or a disc, is in [TESTING.md](./TESTING.md). GitHub Actions runs the same script on `dev`, `main`, and pull requests, and does not require that check before a merge.
+
+`git push` runs `./run_tests.sh` first, using Node 20. A new clone needs `bash scripts/install-git-hooks.sh` once. `SKIP_TESTS=1 git push` skips the check.
 
 ## Job statuses
 
